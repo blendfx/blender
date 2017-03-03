@@ -44,12 +44,12 @@ from addon_utils import check
 class VraisTools(bpy.types.AddonPreferences):
     bl_idname = __name__
 
-    vrais_token = StringProperty(name="VRAIS TOKEN")
+    vrais_key = StringProperty(name="VRAIS API KEY")
 
     def draw(self, context):
         layout = self.layout
-        layout.label(text="Configure your vrais.io token")
-        layout.prop(self, "vrais_token")
+        layout.label(text="Enter your vrais.io API key")
+        layout.prop(self, "vrais_key")
 
 
 # ##########################################################
@@ -191,7 +191,7 @@ def vr_uploader(scn, path):
         "Accept": "text/plain",
         "Title": vs.vrais_title,
         "Description": vs.description,
-        "Token": bpy.context.user_preferences.addons[__name__].preferences.vrais_token,
+        "Token": bpy.context.user_preferences.addons[__name__].preferences.vrais_key,
         "Convergence": str(scn.camera.data.stereo.convergence_distance),
         "IsCubemap": is_cubemap
         }
@@ -340,10 +340,10 @@ class VRAIS_OT_uploader(bpy.types.Operator):
                 "Please fill in a Title"
                 )
             return {'CANCELLED'}
-        elif len(context.user_preferences.addons[__name__].preferences.vrais_token)<2:
+        elif len(context.user_preferences.addons[__name__].preferences.vrais_key)<2:
             self.report(
                 {'ERROR'}, 
-                "No VRAIS token configured in Addon Preferences!"
+                "No VRAIS API key configured in Addon Preferences!"
                 )
             return {'CANCELLED'}
         else:
