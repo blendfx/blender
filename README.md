@@ -1,5 +1,5 @@
-# blender
-Various scripts to improve our inhouse workflow with Blender.
+# Blender Scripts
+In this repository we upload various scripts to improve our inhouse workflow with Blender.
 
 ## VRAIS Tools
 The VRAIS tools are meant to help users of our free VR viewer VRAIS setup their VR scenes and upload the finished rendering to [vrais.io.](http://www.vrais.io)
