@@ -237,7 +237,14 @@ class VRAIS_OT_setup_cubemap(bpy.types.Operator):
 
         cam_data.type = 'PERSP'
         cam_data.angle = radians(90)
-        cam_data.stereo.use_spherical_stereo = True
+
+        try:
+            cam_data.stereo.use_spherical_stereo = True
+        except:
+            self.report(
+                {'ERROR'}, 
+                "You seem to be using Blender 2.77 or lower, which does not support Spherical Stereo. Please consider upgrading to at least 2.78."
+                )
 
         scn.vrais_enum = 'VRAIS_CUBE'
         scn.vrais_settings.cube_filepath = render.filepath
@@ -263,6 +270,7 @@ class VRAIS_OT_setup_vr_panorama(bpy.types.Operator):
         render = scn.render
         cam_data = scn.camera.data
 
+
         render.engine = 'CYCLES'
         render.resolution_y = 2048 # recommended resolution for VRAIS
         render.resolution_x = render.resolution_y * 2
@@ -272,8 +280,15 @@ class VRAIS_OT_setup_vr_panorama(bpy.types.Operator):
 
         cam_data.cycles.panorama_type = 'EQUIRECTANGULAR'
         cam_data.type = 'PANO'
-        cam_data.stereo.use_spherical_stereo = True
-
+        
+        try:
+            cam_data.stereo.use_spherical_stereo = True
+        except:
+            self.report(
+                {'ERROR'}, 
+                "You seem to be using Blender 2.77 or lower, which does not support Spherical Stereo. Please consider upgrading to at least 2.78."
+                )
+            
         scn.vrais_enum = 'VRAIS_EQUI'
         scn.vrais_settings.equi_filepath = render.filepath
 
