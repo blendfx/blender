@@ -40,9 +40,6 @@ def cycles_exists():
 def get_slot_id():
     return bpy.data.images['Render Result'].render_slots.active_index
 
-def get_slot_name():
-    return bpy.data.images['Render Result'].render_slots.active.name
-
 def enable_slot_recording():
     context.scene.record_settings = True
 
@@ -96,13 +93,13 @@ def return_proplist():
 # save all visibly relevant cycles scene settings
 def save_settings_to_storage(slot_id):
     context = bpy.context
-    wm = context.window_manager
+    scene = context.scene
     proplist = return_proplist()
 
     # if the dict doesnt exist yet, create it.
-    if not wm.get('renderslot_properties'):
-        wm['renderslot_properties'] = {}
-    renderslot_properties = wm['renderslot_properties']
+    if not scene.get('renderslot_properties'):
+        scene['renderslot_properties'] = {}
+    renderslot_properties = scene['renderslot_properties']
     # get the active slot id (unless it is 8)
     if slot_id == 8:
         slot_id = str(slot_id)
@@ -119,9 +116,8 @@ def save_settings_to_storage(slot_id):
 
 def load_settings_from_storage(context, slot_id):
     scene = context.scene
-    wm = context.window_manager
     try:
-        renderslot_properties = wm.get('renderslot_properties')
+        renderslot_properties = scene.get('renderslot_properties')
         # find the active slot id
         if not slot_id == 8:
             slot_id = str(get_slot_id())
