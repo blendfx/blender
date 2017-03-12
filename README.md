@@ -1,6 +1,12 @@
 # Blender Scripts
 In this repository we upload various scripts to improve our inhouse workflow with Blender.
 
+## Render Tweaker
+The purpose of this script is to help you with the process of finding the best render settings by tweaking sample and bounces parameters of the Cycles render engine and comparing it to previous results using the render slots in the Image Editor.
+### Usage
+There are two ways to use it. First you can store the current settings by pressing the Save Settings button in the Sampling Panel of the render properties. Now you can tweak all cycles render settings, rerender, compare and restore the previous settings by pressing the Restore Settings button. 
+But you can also use the 8 render slots of the image editor for this. Enable the Record Render Settings button in the header of the Image Editor to save your settings of the current slot. As long as the button is enabled there will be the render settings stored after each render in the current slot. 
+Here's a demo: [https://youtu.be/a3FI_n6vH64](https://youtu.be/a3FI_n6vH64) 
 ## VRAIS Tools
 The VRAIS tools are meant to help users of our free VR viewer VRAIS setup their VR scenes and upload the finished rendering to [vrais.io.](http://www.vrais.io)
 ### Installation
