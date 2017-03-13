@@ -31,7 +31,7 @@ bl_info = {
 
 import bpy
 from bpy.props import StringProperty, BoolProperty
-
+from bpy.utils import register_class, unregister_class
 
 # ################################################
 # FUNCTIONS ######################################
@@ -252,18 +252,23 @@ def store_main_render_setup(self, context):
     row.operator("scene.restore_main_rendersettings", text="Restore Settings")
 
 
-
 # #################################################
 # #### REGISTER ###################################
 # #################################################
 
 
+classes = (
+    RENDER_TWEAKER_OT_enable_slot_recording,
+    RENDER_TWEAKER_OT_render_slot_restore,
+    RENDER_TWEAKER_OT_save_main_rendersettings,
+    RENDER_TWEAKER_OT_restore_main_rendersettings,
+    RENDER_TWEAKER_PT_slot_record
+    )
+
 def register():
-    bpy.utils.register_class(RENDER_TWEAKER_OT_enable_slot_recording)
-    bpy.utils.register_class(RENDER_TWEAKER_OT_render_slot_restore)
-    bpy.utils.register_class(RENDER_TWEAKER_OT_save_main_rendersettings)
-    bpy.utils.register_class(RENDER_TWEAKER_OT_restore_main_rendersettings)
-    bpy.utils.register_class(RENDER_TWEAKER_PT_slot_record)
+    for c in classes:
+        register_class(c)
+
     bpy.app.handlers.render_complete.append(slot_handler)
     if cycles_exists():
         bpy.types.CyclesRender_PT_sampling.append(store_main_render_setup)
@@ -284,11 +289,9 @@ def register():
 
 
 def unregister():
-    bpy.utils.unregister_class(RENDER_TWEAKER_OT_enable_slot_recording)
-    bpy.utils.unregister_class(RENDER_TWEAKER_OT_render_slot_restore)
-    bpy.utils.unregister_class(RENDER_TWEAKER_OT_save_main_rendersettings)
-    bpy.utils.unregister_class(RENDER_TWEAKER_OT_restore_main_rendersettings)
-    bpy.utils.unregister_class(RENDER_TWEAKER_PT_slot_record)
+    for c in classes:
+        unregister_class(c)
+
     if cycles_exists():
         bpy.types.CyclesRender_PT_sampling.remove(store_main_render_setup)
 

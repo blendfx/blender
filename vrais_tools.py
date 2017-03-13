@@ -35,7 +35,9 @@ import http.client
 from bpy.props import *
 from math import radians
 from bpy.types import Operator, AddonPreferences
+from bpy.utils import register_class, unregister_class
 from addon_utils import check
+
 
 # ##########################################################
 # CONFIGURE USER PREFS
@@ -444,14 +446,18 @@ class VraisSettings(bpy.types.PropertyGroup):
 # ##########################################################
 
 
+classes = (
+    VraisTools,
+    VraisSettings,
+    VRAIS_OT_uploader,
+    VRAIS_OT_create_cubemap,
+    VRAIS_OT_setup_vr_panorama,
+    RENDER_PT_vrais_tools
+    )
+
 def register():
-    bpy.utils.register_class(VraisTools)
-    bpy.utils.register_class(VraisSettings)
-    bpy.utils.register_class(VRAIS_OT_uploader)
-    bpy.utils.register_class(VRAIS_OT_create_cubemap)
-    bpy.utils.register_class(VRAIS_OT_setup_cubemap)
-    bpy.utils.register_class(VRAIS_OT_setup_vr_panorama)
-    bpy.utils.register_class(RENDER_PT_vrais_tools)
+    for c in classes:
+        register_class(c)
 
     bpy.types.Scene.vrais_settings = PointerProperty(type=VraisSettings)
     bpy.types.Scene.vrais_enum = bpy.props.EnumProperty(
@@ -461,17 +467,11 @@ def register():
             )
         )
 
-
 def unregister():
-    bpy.utils.unregister_class(VraisTools)
-    bpy.utils.unregister_class(VraisSettings)
-    bpy.utils.unregister_class(VRAIS_OT_uploader)
-    bpy.utils.unregister_class(VRAIS_OT_create_cubemap)
-    bpy.utils.unregister_class(VRAIS_OT_setup_cubemap)
-    bpy.utils.unregister_class(VRAIS_OT_setup_vr_panorama)
-    bpy.utils.unregister_class(RENDER_PT_vrais_tools)
-    del bpy.types.Scene.vrais_settings
+    for c in classes:
+        unregister_class(c)
 
+    del bpy.types.Scene.vrais_settings
 
 if __name__ == "__main__":
     register()
