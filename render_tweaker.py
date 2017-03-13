@@ -19,21 +19,25 @@
 bl_info = {
     "name": "Render Tweaker",
     "author": "Sebastian Koenig",
-    "version": (1,0),
+    "version": (1,1),
     "blender": (2, 77, 0),
     "location": "Properties > Render",
-    "description": "Store Cycles Rendersettings in render slots for easier tweaking",
+    "description": "Store Cycles rendersettings in render slots for easier tweaking",
     "warning": "",
     "wiki_url": "",
     "category": "Render"
     }
 
 
-
 import bpy
 from bpy.props import StringProperty, BoolProperty
 
-# FUNCTION: Checks if cycles is available
+
+# ################################################
+# FUNCTIONS ######################################
+# ################################################
+
+
 def cycles_exists():
     return hasattr(bpy.types.Scene, "cycles")
 
@@ -90,6 +94,7 @@ def return_proplist():
     ]
     return proplist
 
+
 # save all visibly relevant cycles scene settings
 def save_settings_to_storage(slot_id):
     context = bpy.context
@@ -114,6 +119,7 @@ def save_settings_to_storage(slot_id):
     renderslot_properties[slot_id] = slot_id_dict
 
 
+# load cycles render settings
 def load_settings_from_storage(context, slot_id):
     scene = context.scene
     try:
@@ -134,17 +140,20 @@ def load_settings_from_storage(context, slot_id):
         return False
 
 
+# copy all relevant cycles settings from the master scene 
+def copy_master_scene_render_setup(context, masterscene):
+    scene = context.scene
+
+    for prop in return_proplist():
+        new_prop = getattr(masterscene.cycles, prop)
+        setattr(scene.cycles, prop, new_prop)
+
+
+# if slot recording is enabled, save render settings from current slot
 def slot_handler(scene):
     if scene.record_settings:
         save_settings_to_storage(0)
 
-
-# Append Tweaker controls for sampling panel
-def store_main_render_setup(self, context):
-    layout = self.layout
-    row = layout.row(align=True)
-    row.operator("scene.save_main_rendersettings", text="Save Settings", icon='SAVE_COPY')
-    row.operator("scene.restore_main_rendersettings", text="Restore Settings", icon='LOAD_FACTORY')
 
 
 # ###########################################
@@ -152,19 +161,8 @@ def store_main_render_setup(self, context):
 # ###########################################
 
 
-class TWEAKER_OT_render_slot_restore(bpy.types.Operator):
-    '''Restore render settings from render slot'''
-    bl_idname = "scene.render_slot_restore"
-    bl_label = "Restore Rendersettings"
-
-    def execute(self, context):
-        if not load_settings_from_storage(context, 0):
-            self.report({'ERROR'}, "you didn't save a slot yet!")
-        return {'FINISHED'}
-
-
-class TWEAKER_OT_save_main_rendersettings(bpy.types.Operator):
-    '''Restore render settings from main settings'''
+class RENDER_TWEAKER_OT_save_main_rendersettings(bpy.types.Operator):
+    '''Save the current render settings as main settings'''
     bl_idname = "scene.save_main_rendersettings"
     bl_label = "Save Main Rendersettings"
 
@@ -173,7 +171,8 @@ class TWEAKER_OT_save_main_rendersettings(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class TWEAKER_OT_restore_main_rendersettings(bpy.types.Operator):
+
+class RENDER_TWEAKER_OT_restore_main_rendersettings(bpy.types.Operator):
     '''Restore render settings from main settings'''
     bl_idname = "scene.restore_main_rendersettings"
     bl_label = "Restore Main Rendersettings"
@@ -184,7 +183,8 @@ class TWEAKER_OT_restore_main_rendersettings(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class TWEAKER_OT_enable_slot_recording(bpy.types.Operator):
+
+class RENDER_TWEAKER_OT_enable_slot_recording(bpy.types.Operator):
     ''' Enable render setting storing. Press Ctrl+J to restore Settings.'''
     bl_idname = "scene.enable_slot_recording"
     bl_label = "Record Render Settings"
@@ -200,8 +200,66 @@ class TWEAKER_OT_enable_slot_recording(bpy.types.Operator):
 
 
 
-class IMAGE_PT_slot_record(bpy.types.Header):
-    bl_idname = "panel.slot_panel"
+class RENDER_TWEAKER_OT_render_slot_restore(bpy.types.Operator):
+    '''Restore render settings from render slot'''
+    bl_idname = "scene.render_slot_restore"
+    bl_label = "Restore Rendersettings"
+
+    def execute(self, context):
+        if not load_settings_from_storage(context, 0):
+            self.report({'ERROR'}, "you didn't save a slot yet!")
+        return {'FINISHED'}
+
+
+
+class RENDER_TWEAKER_OT_set_master_scene(bpy.types.Operator):
+    '''Make this the master scene. Transfer settings from this scene to other scenes'''
+    bl_idname = "scene.set_master_scene"
+    bl_label = "Set master scene"
+
+    def execute(self, context):
+        scene = context.scene
+        print(scene.name)
+        if len(bpy.data.scenes)>1:
+            for s in bpy.data.scenes:
+                print("here are all the scenes:", s)
+                for s in bpy.data.scenes:
+                    if s == scene:
+                        s.master_scene = True
+                    else:
+                        s.master_scene = False
+
+        return {'FINISHED'}
+
+
+
+class RENDER_TWEAKER_OT_transfer_from_master(bpy.types.Operator):
+    ''' Transfer render settings from master scene'''
+    bl_idname = "scene.transfer_from_master_scene"
+    bl_label = "Transfer from Master"
+
+    def execute(self, context):
+        if len(bpy.data.scenes)>1:
+            if context.scene.master_scene:
+                self.report({'ERROR'}, "You cannot copy from self")
+            else:
+                for s in bpy.data.scenes:
+                    if s.master_scene:
+                        copy_master_scene_render_setup(context, s)
+        else:
+            self.report({'ERROR'}, "no master set")
+
+        return {'FINISHED'}
+
+
+
+# ####################################################
+# UI #################################################
+# ####################################################
+
+
+class RENDER_TWEAKER_PT_slot_record(bpy.types.Header):
+    bl_idname = "panel.render_tweaker_record"
     bl_label = "Slot Record"
     bl_space_type = "IMAGE_EDITOR"
     bl_region_type = "HEADER"
@@ -214,7 +272,25 @@ class IMAGE_PT_slot_record(bpy.types.Header):
         else:
             layout.operator("scene.enable_slot_recording", text="", icon="RADIOBUT_OFF")
 
-            
+
+
+# Append Tweaker controls to Cycles Sampling Panel
+def store_main_render_setup(self, context):
+    scene = context.scene
+    layout = self.layout
+    multiscene = len(bpy.data.scenes)>1
+    test = []
+    for s in bpy.data.scenes:
+        if s.master_scene:
+            test.append(s)
+    transfer_available = len(test)>0
+    row = layout.row(align=True)
+    row.operator("scene.save_main_rendersettings", text="Save Settings")
+    row.operator("scene.restore_main_rendersettings", text="Restore Settings")
+    row.operator("scene.set_master_scene", text="Set Master")
+    sub = row.row(align=True)
+    sub.enabled = not scene.master_scene and transfer_available
+    sub.operator("scene.transfer_from_master_scene", text="Transfer")
 
 
 
@@ -224,11 +300,13 @@ class IMAGE_PT_slot_record(bpy.types.Header):
 
 
 def register():
-    bpy.utils.register_class(TWEAKER_OT_enable_slot_recording)
-    bpy.utils.register_class(TWEAKER_OT_render_slot_restore)
-    bpy.utils.register_class(TWEAKER_OT_save_main_rendersettings)
-    bpy.utils.register_class(TWEAKER_OT_restore_main_rendersettings)
-    bpy.utils.register_class(IMAGE_PT_slot_record)
+    bpy.utils.register_class(RENDER_TWEAKER_OT_enable_slot_recording)
+    bpy.utils.register_class(RENDER_TWEAKER_OT_render_slot_restore)
+    bpy.utils.register_class(RENDER_TWEAKER_OT_save_main_rendersettings)
+    bpy.utils.register_class(RENDER_TWEAKER_OT_restore_main_rendersettings)
+    bpy.utils.register_class(RENDER_TWEAKER_OT_set_master_scene)
+    bpy.utils.register_class(RENDER_TWEAKER_OT_transfer_from_master)
+    bpy.utils.register_class(RENDER_TWEAKER_PT_slot_record)
     bpy.app.handlers.render_complete.append(slot_handler)
     if cycles_exists():
         bpy.types.CyclesRender_PT_sampling.append(store_main_render_setup)
@@ -236,6 +314,10 @@ def register():
     bpy.types.Scene.record_settings = BoolProperty(
         name = "Record Render Settings",
         description="After eacher render save the render settings in current render slot",
+        default=False)
+    bpy.types.Scene.master_scene = BoolProperty(
+        name = "Master Scene",
+        description="When working with multiple scenes, make this the master scene to copy settings from",
         default=False)
 
     wm = bpy.context.window_manager
@@ -245,11 +327,13 @@ def register():
 
 
 def unregister():
-    bpy.utils.unregister_class(TWEAKER_OT_enable_slot_recording)
-    bpy.utils.unregister_class(TWEAKER_OT_render_slot_restore)
-    bpy.utils.unregister_class(TWEAKER_OT_save_main_rendersettings)
-    bpy.utils.unregister_class(TWEAKER_OT_restore_main_rendersettings)
-    bpy.utils.unregister_class(IMAGE_PT_slot_record)
+    bpy.utils.unregister_class(RENDER_TWEAKER_OT_enable_slot_recording)
+    bpy.utils.unregister_class(RENDER_TWEAKER_OT_render_slot_restore)
+    bpy.utils.unregister_class(RENDER_TWEAKER_OT_save_main_rendersettings)
+    bpy.utils.unregister_class(RENDER_TWEAKER_OT_restore_main_rendersettings)
+    bpy.utils.unregister_class(RENDER_TWEAKER_OT_set_master_scene)
+    bpy.utils.unregister_class(RENDER_TWEAKER_OT_transfer_from_master)
+    bpy.utils.unregister_class(RENDER_TWEAKER_PT_slot_record)
     if cycles_exists():
         bpy.types.CyclesRender_PT_sampling.remove(store_main_render_setup)
 
@@ -259,4 +343,3 @@ def unregister():
 
 if __name__ == "__main__":
     register()
- 
