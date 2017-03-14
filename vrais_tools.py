@@ -450,6 +450,7 @@ classes = (
     VraisTools,
     VraisSettings,
     VRAIS_OT_uploader,
+    VRAIS_OT_setup_cubemap,
     VRAIS_OT_create_cubemap,
     VRAIS_OT_setup_vr_panorama,
     RENDER_PT_vrais_tools
