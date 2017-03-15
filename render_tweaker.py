@@ -30,8 +30,9 @@ bl_info = {
 
 
 import bpy
-from bpy.props import StringProperty, BoolProperty
+from bpy.props import StringProperty, BoolProperty, IntProperty
 from bpy.utils import register_class, unregister_class
+from bl_operators.presets import AddPresetBase
 
 # ################################################
 # FUNCTIONS ######################################
@@ -110,6 +111,7 @@ def save_settings_to_storage(slot_id):
         slot_id = str(slot_id)
     else:
         slot_id = str(get_slot_id())
+        bpy.context.window_manager.recent_render = str(int(slot_id)+1)
     # create the dict for the slot
     slot_id_dict = {}
     # fill the dict with the properties
@@ -216,40 +218,77 @@ class RENDER_TWEAKER_OT_render_slot_restore(bpy.types.Operator):
 
 
 
+
+class RENDER_TWEAKER_OT_tweaker_preset_add(AddPresetBase, bpy.types.Operator):
+    ''' Add a new render preset'''
+    bl_idname = "render.tweaker_preset_add"
+    bl_label = "Add Tweaker Preset"
+    bl_options = {'REGISTER', 'UNDO'}
+    preset_menu = 'RENDER_TWEAKER_MT_tweaker_presets'
+    preset_subdir = 'render_tweaker_presets'
+
+    preset_defines = [
+        "render = bpy.context.scene.render",
+        "cycles = bpy.context.scene.cycles"
+        ]
+
+    preset_values = []
+    for p in return_proplist():
+        pv = "cycles." + p
+        preset_values.append(pv)
+
+
 # ####################################################
 # UI #################################################
 # ####################################################
 
 
-class RENDER_TWEAKER_PT_slot_record(bpy.types.Header):
-    bl_idname = "panel.render_tweaker_record"
-    bl_label = "Slot Record"
-    bl_space_type = "IMAGE_EDITOR"
-    bl_region_type = "HEADER"
+class RENDER_TWEAKER_PT_main_ui(bpy.types.Panel):
+    bl_idname = "render.render_tweaker"
+    bl_label = "Render Tweaker"
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "render"
 
     def draw(self, context):
         scene = context.scene
         layout = self.layout
+
+        row = layout.row(align=True)
+        row.label(text="Render Slot Control")
         if scene.record_settings:
-            layout.operator("scene.enable_slot_recording", text="", icon="REC")
+            row.operator("scene.enable_slot_recording", text="Slot Recording Enabled", icon="REC")
         else:
-            layout.operator("scene.enable_slot_recording", text="", icon="RADIOBUT_OFF")
+            row.operator("scene.enable_slot_recording", text="Slot Recording Disabled", icon="RADIOBUT_OFF")
+
+        
+        col = layout.column()
+        if not bpy.context.window_manager.recent_render == "":
+            slot = bpy.context.window_manager.recent_render
+            col.label(text="Most recent render: Slot %s" %slot)
+        else:
+            col.label(text="No render stored during this session yet.")
+
+        row = layout.row(align=True)
+        row.operator("scene.save_main_rendersettings", text="Quick Save Settings")
+        row.operator("scene.restore_main_rendersettings", text="Quick Restore Settings")
+        col = layout.column_flow(align=True)
+        col.label(text="Render Tweaker Presets")
+        row = col.row(align=True)
+        row.menu("RENDER_TWEAKER_MT_tweaker_presets", text=bpy.types.RENDER_TWEAKER_MT_tweaker_presets.bl_label)
+        row.operator("render.tweaker_preset_add", text="", icon='ZOOMIN')
+        row.operator("render.tweaker_preset_add", text="", icon='ZOOMOUT').remove_active=True
 
 
 
-# Append Tweaker controls to Cycles Sampling Panel
-def store_main_render_setup(self, context):
-    scene = context.scene
-    layout = self.layout
-    multiscene = len(bpy.data.scenes)>1
-    test = []
-    for s in bpy.data.scenes:
-        if s.master_scene:
-            test.append(s)
-    transfer_available = len(test)>0
-    row = layout.row(align=True)
-    row.operator("scene.save_main_rendersettings", text="Save Settings")
-    row.operator("scene.restore_main_rendersettings", text="Restore Settings")
+
+class RENDER_TWEAKER_MT_tweaker_presets(bpy.types.Menu):
+    bl_idname = "RENDER_TWEAKER_MT_tweaker_presets"
+    bl_label = "Render Tweaker Presets"
+    preset_subdir = "render_tweaker_presets"
+    preset_operator = "script.execute_preset"
+
+    draw = bpy.types.Menu.draw_preset
 
 
 # #################################################
@@ -262,7 +301,9 @@ classes = (
     RENDER_TWEAKER_OT_render_slot_restore,
     RENDER_TWEAKER_OT_save_main_rendersettings,
     RENDER_TWEAKER_OT_restore_main_rendersettings,
-    RENDER_TWEAKER_PT_slot_record
+    RENDER_TWEAKER_OT_tweaker_preset_add,
+    RENDER_TWEAKER_MT_tweaker_presets,
+    RENDER_TWEAKER_PT_main_ui
     )
 
 def register():
@@ -270,8 +311,6 @@ def register():
         register_class(c)
 
     bpy.app.handlers.render_complete.append(slot_handler)
-    if cycles_exists():
-        bpy.types.CyclesRender_PT_sampling.append(store_main_render_setup)
 
     bpy.types.Scene.record_settings = BoolProperty(
         name = "Record Render Settings",
@@ -281,6 +320,11 @@ def register():
         name = "Master Scene",
         description="When working with multiple scenes, make this the master scene to copy settings from",
         default=False)
+    bpy.types.WindowManager.recent_render = StringProperty(
+        name = "Recently Rendered Slot",
+        description = "Shows the most recently rendered slot",
+        default=""
+        )
 
     wm = bpy.context.window_manager
     km = wm.keyconfigs.addon.keymaps.new(name='Image', space_type='IMAGE_EDITOR')
@@ -292,8 +336,6 @@ def unregister():
     for c in classes:
         unregister_class(c)
 
-    if cycles_exists():
-        bpy.types.CyclesRender_PT_sampling.remove(store_main_render_setup)
 
     if slot_handler in bpy.app.handlers.render_complete:
         bpy.app.handlers.render_complete.remove(slot_handler)
