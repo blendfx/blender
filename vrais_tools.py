@@ -78,8 +78,10 @@ def create_new_scene(context):
     new_scn.name = "vrais_tmp_scene"
 
     tree = new_scn.node_tree
-    new_scn.view_settings.view_transform = scn.view_settings.view_transform
-    new_scn.view_settings.look = scn.view_settings.look
+    try:
+        new_scn.view_settings.view_transform = 'sRGB EOTF'
+    except:
+        new_scn.view_settings.view_transform = 'sRGB'
     cam_data = scn.camera.data
     cam = bpy.data.objects.new("tmp_cam", cam_data)
     new_scn.objects.link(cam)
