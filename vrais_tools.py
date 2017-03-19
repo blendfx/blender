@@ -335,7 +335,7 @@ class VRAIS_OT_uploader(bpy.types.Operator):
         if scn.vrais_enum == 'VRAIS_CUBE':
             path = bpy.path.abspath(configure_vrais_cubemap_path(scn))
         elif scn.vrais_enum == 'VRAIS_EQUI':
-            path = vs.equi_filepath
+            path = bpy.path.abspath(vs.equi_filepath)
 
         # check if camera, title and description are setup correctly
         if not scn.camera.data.stereo.use_spherical_stereo:
