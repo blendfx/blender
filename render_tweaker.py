@@ -257,12 +257,18 @@ class RENDER_TWEAKER_PT_main_ui(bpy.types.Panel):
         scene = context.scene
         layout = self.layout
 
+        col = layout.column_flow(align=True)
+        row = col.row(align=True)
+        row.menu("RENDER_TWEAKER_MT_tweaker_presets", text=bpy.types.RENDER_TWEAKER_MT_tweaker_presets.bl_label)
+        row.operator("render.tweaker_preset_add", text="", icon='ZOOMIN')
+        row.operator("render.tweaker_preset_add", text="", icon='ZOOMOUT').remove_active=True
+
         row = layout.row(align=True)
         if not bpy.context.window_manager.recent_render == "":
             slot = bpy.context.window_manager.recent_render
             row.label(text="Recently stored: Slot %s" %slot)
         else:
-            row.label(text="No render slot stored in this session yet.")
+            row.label(text="No slot stored in this session yet.")
         if scene.record_settings:
             row.operator("scene.enable_slot_recording", text="Slot Recording Enabled", icon="REC")
         else:
@@ -273,13 +279,6 @@ class RENDER_TWEAKER_PT_main_ui(bpy.types.Panel):
         row = layout.row(align=True)
         row.operator("scene.save_main_rendersettings", text="Quick Save Settings")
         row.operator("scene.restore_main_rendersettings", text="Quick Restore Settings")
-        col = layout.column_flow(align=True)
-        col.label(text="Render Tweaker Presets")
-        row = col.row(align=True)
-        row.menu("RENDER_TWEAKER_MT_tweaker_presets", text=bpy.types.RENDER_TWEAKER_MT_tweaker_presets.bl_label)
-        row.operator("render.tweaker_preset_add", text="", icon='ZOOMIN')
-        row.operator("render.tweaker_preset_add", text="", icon='ZOOMOUT').remove_active=True
-
 
 
 
