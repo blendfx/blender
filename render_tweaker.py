@@ -191,17 +191,20 @@ class RENDER_TWEAKER_OT_restore_main_rendersettings(bpy.types.Operator):
 
 
 class RENDER_TWEAKER_OT_enable_slot_recording(bpy.types.Operator):
-    ''' Enable render setting storing. Press Ctrl+J to restore Settings.'''
+    ''' Enable render setting storing. Press Ctrl+J to restore settings.'''
     bl_idname = "scene.enable_slot_recording"
     bl_label = "Record Render Settings"
 
     def execute(self, context):
         scene = context.scene
-        if not scene.record_settings:
-            scene.record_settings = True
-            save_settings_to_storage(0)
+        if bpy.data.images.get('Render Result'):
+            if not scene.record_settings:
+                scene.record_settings = True
+                save_settings_to_storage(0)
+            else:
+                scene.record_settings = False
         else:
-            scene.record_settings = False
+            self.report({'WARNING'}, "You need to have a Render Result first.")
         return {'FINISHED'}
 
 
@@ -255,19 +258,17 @@ class RENDER_TWEAKER_PT_main_ui(bpy.types.Panel):
         layout = self.layout
 
         row = layout.row(align=True)
-        row.label(text="Render Slot Control")
+        if not bpy.context.window_manager.recent_render == "":
+            slot = bpy.context.window_manager.recent_render
+            row.label(text="Recently stored: Slot %s" %slot)
+        else:
+            row.label(text="No render slot stored in this session yet.")
         if scene.record_settings:
             row.operator("scene.enable_slot_recording", text="Slot Recording Enabled", icon="REC")
         else:
             row.operator("scene.enable_slot_recording", text="Slot Recording Disabled", icon="RADIOBUT_OFF")
 
         
-        col = layout.column()
-        if not bpy.context.window_manager.recent_render == "":
-            slot = bpy.context.window_manager.recent_render
-            col.label(text="Most recent render: Slot %s" %slot)
-        else:
-            col.label(text="No render stored during this session yet.")
 
         row = layout.row(align=True)
         row.operator("scene.save_main_rendersettings", text="Quick Save Settings")
