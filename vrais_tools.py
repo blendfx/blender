@@ -81,7 +81,7 @@ def create_new_scene(context):
     try:
         new_scn.view_settings.view_transform = 'sRGB EOTF'
     except:
-        new_scn.view_settings.view_transform = 'sRGB'
+        new_scn.view_settings.view_transform = 'Default'
     cam_data = scn.camera.data
     cam = bpy.data.objects.new("tmp_cam", cam_data)
     new_scn.objects.link(cam)
