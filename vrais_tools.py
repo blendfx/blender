@@ -79,7 +79,7 @@ def create_new_scene(context):
 
     tree = new_scn.node_tree
     try:
-        new_scn.view_settings.view_transform = 'sRGB EOTF'
+        new_scn.view_settings.view_transform = 'sRGB'
     except:
         new_scn.view_settings.view_transform = 'Default'
     cam_data = scn.camera.data
