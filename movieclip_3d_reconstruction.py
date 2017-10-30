@@ -12,11 +12,6 @@ bl_info = {
 
 import bpy
 
-#################################################
-############## FUNCTIONS ########################
-#################################################
-
-
 class VIEW3D_OT_reconstruct_3d_plane(bpy.types.Operator):
     bl_idname = "clip.reconstruct_3d_plane"
     bl_label = "Reconstruct 3D Plane"
@@ -45,7 +40,6 @@ class VIEW3D_OT_reconstruct_3d_plane(bpy.types.Operator):
 
 
 
-
 class CLIP_PT_scene_reconstruction(bpy.types.Panel):
     bl_idname = "clip.scene_reconstruction"
     bl_label = "Scene Reconstruction"
@@ -60,17 +54,11 @@ class CLIP_PT_scene_reconstruction(bpy.types.Panel):
         col.operator("clip.reconstruct_3d_plane")
 
 
-
 ########## REGISTER ############
 
 def register():
     bpy.utils.register_class(VIEW3D_OT_reconstruct_3d_plane)
     bpy.utils.register_class(CLIP_PT_scene_reconstruction)
-
-    wm = bpy.context.window_manager
-    km = wm.keyconfigs.addon.keymaps.new(name='Clip', space_type='CLIP_EDITOR')
-    kmi = km.keymap_items.new('clip.track_hooker', 'J', 'PRESS')
-
 
 
 def unregister():
