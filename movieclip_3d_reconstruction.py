@@ -18,16 +18,17 @@
 
 
 bl_info = {
-"name": "Reconstruct 3D Mesh",
-"author": "Sebastian Koenig",
-"version": (1, 0),
-"blender": (2, 7, 9),
-"location": "Clip Editor > Tools > Reconstruct 3D Mesh",
-"description": "Generate a 3D mesh from trackers, works best for simple planes",
-"warning": "",
-"wiki_url": "",
-"tracker_url": "",
-"category": "Motion Tracking"}
+    "name": "Reconstruct 3D Mesh",
+    "author": "Sebastian Koenig",
+    "version": (1, 0),
+    "blender": (2, 7, 9),
+    "location": "Clip Editor > Tools > Reconstruct 3D Mesh",
+    "description": "Generate a 3D mesh from trackers, works best for simple planes",
+    "warning": "",
+    "wiki_url": "",
+    "tracker_url": "",
+    "category": "Motion Tracking"
+}
 
 
 import bpy
