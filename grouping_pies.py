@@ -81,8 +81,8 @@ class VIEW3D_OT_DupliOffset(bpy.types.Operator):
 
 class MaskChooser(bpy.types.Operator):
     ''' Open a dialogue with Group Controls'''
-    bl_label = "Mask Chooser"
-    bl_idname = "object.mask_chooser"
+    bl_label = "Group Select"
+    bl_idname = "object.group_select"
     bl_options = {'REGISTER', 'UNDO'}
 
 
@@ -113,6 +113,20 @@ class MaskChooser(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class VIEW3D_OT_SetGroupDrawType(bpy.types.Operator):
+    bl_idname = "object.set_group_draw_size"
+    bl_label = "Group Draw Size"
+
+    @classmethod
+    def poll(cls, context):
+        return (context.object is not None)
+
+    def execute(self, context):
+        ob = context.active_object
+        if ob.type == 'EMPTY':
+            ob.empty_draw_size = 0.1
+        return {'FINISHED'}
+
 
 class VIEW3D_PIE_GroupingPies(Menu):
     bl_idname = "object.grouping_pies"
@@ -122,8 +136,11 @@ class VIEW3D_PIE_GroupingPies(Menu):
         layout = self.layout
         pie = layout.menu_pie()
 
-        pie.operator("object.dupli_offset_from_cursor", text="Offset from Cursor")
-        pie.operator("object.mask_chooser", text="Mask Chooser")
+        pie.operator("object.dupli_offset_from_cursor", text="Offset from Cursor", icon='CURSOR')
+        pie.operator("object.group_select", text="Group Select")
+        pie.operator("object.edit_linked", icon='LINK_BLEND')
+        pie.operator("object.select_linked", icon='LINKED').type='DUPGROUP'
+        pie.operator("object.set_group_draw_size", icon='EMPTY_DATA')
 
 
 
@@ -137,6 +154,7 @@ classes = (
         MaskChooser,
         VIEW3D_PIE_GroupingPies,
         VIEW3D_OT_DupliOffset,
+        VIEW3D_OT_SetGroupDrawType
          )
 
 def register():
