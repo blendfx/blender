@@ -21,7 +21,7 @@ bl_info = {
     "author": "Sebastian Koenig",
     "version": (0,1),
     "blender": (2, 79, 0),
-    "location": "Viewpor",
+    "location": "Viewport",
     "description": "Control Groups with a pie menu", 
     "warning": "",
     "wiki_url": "",
@@ -31,27 +31,35 @@ bl_info = {
 import bpy
 from bpy.props import (IntProperty)
 from bpy.types import Menu
+from bpy.types import Operator
 
 
-# TODO: edit linked library
-# TODO: change name based on object
-# TODO: change object name based on group
+def check_if_group(context):
+    # return True only if the object is part of a group
+    if len(context.active_object.users_group) > 0:
+        return True
+
+def check_if_empty(context):
+    # check if the object is actually an Empty
+    if context.active_object.type == 'EMPTY':
+        return True
 
 def group_items(self, context):
     return [(g.name, g.name, g.name) for g in bpy.data.groups]
 
 def assign_group(self, context):
-    ob = context.active_object
-    # if the group propery has not been written, set the group to None
-    if not context.scene.group:
-        ob.dupli_group = None
-    else:
-        # now that we know that there is scene.group, assign it to the active object
-        g = bpy.data.groups[context.scene.group]
-        ob.dupli_type = 'GROUP'
-        ob.dupli_group = g
+    for ob in context.selected_objects:
+        # if the group propery has not been written, set the group to None
+        if not context.scene.group:
+            ob.dupli_group = None
+        else:
+            # now that we know that there is scene.group, assign it to the active object
+            g = bpy.data.groups[context.scene.group]
+            ob.dupli_type = 'GROUP'
+            ob.dupli_group = g
 
-class VIEW3D_OT_DupliOffset(bpy.types.Operator):
+
+class VIEW3D_OT_DupliOffset(Operator):
     """Set offset used for DupliGroup based on cursor position"""
     bl_idname = "object.dupli_offset_from_cursor"
     bl_label = "Set Offset From Cursor"
@@ -66,7 +74,7 @@ class VIEW3D_OT_DupliOffset(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return (context.active_object is not None)
+        return (context.active_object is not None and check_if_group(context))
 
     def execute(self, context):
         scene = context.scene
@@ -79,16 +87,52 @@ class VIEW3D_OT_DupliOffset(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class MaskChooser(bpy.types.Operator):
+class VIEW3D_OT_NameGroupFromObject(Operator):
+    ''' Set Group Name from Object Name '''
+    bl_idname = "object.name_group_from_object"
+    bl_label = "GroupName from Object"
+
+    @classmethod
+    def poll(cls, context):
+        return (context.object is not None and check_if_group(context))
+
+    def execute(self, context):
+        ob = context.active_object
+        # Only if there is one group the object is part of, rename it
+        if not len(ob.users_group) > 1:
+            ob.users_group[0].name = ob.name
+        return {'FINISHED'} 
+
+
+class VIEW3D_OT_NameObjectFromGroup(Operator):
+    ''' Set Object Name from Group Name '''
+    bl_idname = "object.name_object_from_group"
+    bl_label = "ObjectName from Group"
+
+    @classmethod
+    def poll(cls, context):
+        return (context.object is not None and check_if_group(context))
+
+    def execute(self, context):
+        # Only if there is one group the object is part of, rename it
+        for ob in context.selected_objects:
+            if not len(ob.users_group) > 1:
+                ob.name = ob.users_group[0].name
+        return {'FINISHED'} 
+
+
+
+
+class VIEW3D_OT_AssignGroup(Operator):
     ''' Open a dialogue with Group Controls'''
     bl_label = "Group Select"
-    bl_idname = "object.group_select"
+    bl_idname = "object.assign_group"
     bl_options = {'REGISTER', 'UNDO'}
 
 
     @classmethod
     def poll(cls, context):
-        return (context.object is not None)
+        return (context.object is not None and check_if_empty(context))
 
     def invoke(self, context, event):
         return context.window_manager.invoke_props_dialog(self)
@@ -107,13 +151,12 @@ class MaskChooser(bpy.types.Operator):
         # search the groups in bpy.data and then write it to scene.group
         row.prop_search(context.scene, "group", bpy.data, "groups")
 
-
     def execute(self, context):
         assign_group(self, context)
         return {'FINISHED'}
 
 
-class VIEW3D_OT_SetGroupDrawType(bpy.types.Operator):
+class VIEW3D_OT_SetGroupDrawType(Operator):
     bl_idname = "object.set_group_draw_size"
     bl_label = "Group Draw Size"
 
@@ -136,12 +179,14 @@ class VIEW3D_PIE_GroupingPies(Menu):
         layout = self.layout
         pie = layout.menu_pie()
 
-        pie.operator("object.dupli_offset_from_cursor", text="Offset from Cursor", icon='CURSOR')
-        pie.operator("object.group_select", text="Group Select")
+        pie.operator("object.select_linked", text="Select Same Object Data", icon='OBJECT_DATA').type='OBDATA'
+        pie.operator("object.select_linked", text="Select Same Group", icon='GROUP').type='DUPGROUP'
         pie.operator("object.edit_linked", icon='LINK_BLEND')
-        pie.operator("object.select_linked", icon='LINKED').type='DUPGROUP'
+        pie.operator("object.assign_group", text="Assign Group", icon='GROUP')
+        pie.operator("object.dupli_offset_from_cursor", text="Offset from Cursor", icon='CURSOR')
         pie.operator("object.set_group_draw_size", icon='EMPTY_DATA')
-
+        pie.operator("object.name_object_from_group", icon='OUTLINER_OB_GROUP_INSTANCE')
+        pie.operator("object.name_group_from_object", icon='MESH_CUBE')
 
 
 
@@ -151,11 +196,13 @@ class VIEW3D_PIE_GroupingPies(Menu):
 
 
 classes = (
-        MaskChooser,
+        VIEW3D_OT_AssignGroup,
         VIEW3D_PIE_GroupingPies,
         VIEW3D_OT_DupliOffset,
-        VIEW3D_OT_SetGroupDrawType
-         )
+        VIEW3D_OT_SetGroupDrawType,
+        VIEW3D_OT_NameGroupFromObject,
+        VIEW3D_OT_NameObjectFromGroup
+        )
 
 def register():
     for c in classes:
@@ -164,7 +211,6 @@ def register():
     wm = bpy.context.window_manager
     km = wm.keyconfigs.addon.keymaps.new(name="Object Mode")
     kmi = km.keymap_items.new('wm.call_menu_pie', 'Y', 'PRESS', shift=True).properties.name = "object.grouping_pies"
-    #kmi = km.keymap_items.new('object.grouping_pies', 'Y', 'PRESS', shift=True)
     
     bpy.types.Scene.group = bpy.props.StringProperty()
 
