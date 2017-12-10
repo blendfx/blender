@@ -17,7 +17,7 @@
 # ##### END GPL LICENSE BLOCK #####
 
 bl_info = {
-    "name": "Fade Markerweight",
+    "name": "Fade Marker Weight",
     "author": "Sebastian Koenig",
     "version": (0,1),
     "blender": (2, 79, 0),
@@ -29,7 +29,7 @@ bl_info = {
     }
 
 import bpy
-from bpy.types import Operator
+from bpy.types import Operator, Panel
 
 def get_marker_list(context, selection):
     '''
@@ -82,13 +82,15 @@ def insert_keyframe(context, fade_time, dict):
 # CLASSES
 ##############################
 
-class CLIP_OT_WeightFadeSelected(Operator):
-    bl_idname = "clip.weight_fade_selected"
-    bl_label = "Fade Selected Marker Weight"
+class CLIP_OT_WeightFade(Operator):
+    '''Fade in the weight of selected markers'''
+    bl_idname = "clip.weight_fade"
+    bl_label = "Fade Marker Weight"
     bl_options = {'REGISTER', 'UNDO'}
 
     fade_time = bpy.props.IntProperty(name="Fade Time",
             default=10, min=0, max=100)
+
     @classmethod
     def poll(cls, context):
         space = context.space_data
@@ -99,22 +101,18 @@ class CLIP_OT_WeightFadeSelected(Operator):
         return {'FINISHED'}
 
 
-class CLIP_OT_WeightFadeAll(Operator):
-    bl_idname = "clip.weight_fade_all"
-    bl_label = "Fade All Marker Weight"
-    bl_options = {'REGISTER', 'UNDO'}
 
-    fade_time = bpy.props.IntProperty(name="Fade Time",
-            default=10, min=0, max=100)
+class CLIP_PT_WeightFadePanel(Panel):
+    bl_idname = "clip.weight_fade_panel"
+    bl_label = "Weight Fade"
+    bl_space_type = "CLIP_EDITOR"
+    bl_region_type = "TOOLS"
+    bl_category = "Track"
 
-    @classmethod
-    def poll(cls, context):
-        space = context.space_data
-        return (space.type == 'CLIP_EDITOR')
-
-    def execute(self, context):
-        insert_keyframe(context, self.fade_time, get_marker_list(context, False))
-        return {'FINISHED'}
+    def draw(self, context):
+        layout = self.layout
+        col = layout.column()
+        col.operator("clip.weight_fade")
 
 ###################
 # REGISTER
@@ -122,17 +120,16 @@ class CLIP_OT_WeightFadeAll(Operator):
 
 
 def register():
-    bpy.utils.register_class(CLIP_OT_WeightFadeSelected)
-    bpy.utils.register_class(CLIP_OT_WeightFadeAll)
+    bpy.utils.register_class(CLIP_OT_WeightFade)
+    bpy.utils.register_class(CLIP_PT_WeightFadePanel)
 
     wm = bpy.context.window_manager
     km = wm.keyconfigs.addon.keymaps.new(name='Clip Editor', space_type='CLIP_EDITOR')
-    kmi = km.keymap_items.new('clip.weight_fade_selected', 'W', 'PRESS', alt=True)
-    kmi = km.keymap_items.new('clip.weight_fade_all', 'W', 'PRESS', alt=True, shift=True)
+    kmi = km.keymap_items.new('clip.weight_fade', 'W', 'PRESS', alt=True)
 
 def unregister():
-    bpy.utils.unregister_class(CLIP_OT_WeightFadeSelected)
-    bpy.utils.unregister_class(CLIP_OT_WeightFadeAll)
+    bpy.utils.unregister_class(CLIP_OT_WeightFade)
+    bpy.utils.unregister_class(CLIP_PT_WeightFadePanel)
 
 if __name__ == "__main__":
     register()
