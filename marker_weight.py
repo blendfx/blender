@@ -33,13 +33,13 @@ from bpy.types import Operator, Panel
 
 def get_marker_list(context, selection):
     '''
-    Everytime the operator is executed, generate a dict with all tracks and
+    Everytime the operator is executed, generate a dictionary with all tracks and
     their markers, if they are not too short and/or are selected
     '''
     f_start = context.scene.frame_start
     f_end = context.scene.frame_end
     tracks = context.space_data.clip.tracking.tracks
-    dict = {}
+    marker_dict = {}
     for t in tracks:
         list = []
         for i in range(f_start, f_end):
@@ -48,14 +48,14 @@ def get_marker_list(context, selection):
         if len(list)>20:
             if selection:
                 if t.select:
-                    dict[t] = list
+                    marker_dict[t] = list
             else:
-                dict[t] = list
-    return dict 
+                marker_dict[t] = list
+    return marker_dict 
 
-def insert_keyframe(context, fade_time, dict):
+def insert_keyframe(context, fade_time, marker_dict):
     tracks = context.space_data.clip.tracking.tracks
-    for track, list in dict.items():
+    for track, list in marker_dict.items():
         # define keyframe_values
         frame1 = list[0]
         frame2 = list[0] + fade_time
