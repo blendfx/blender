@@ -64,17 +64,14 @@ def insert_keyframe(context, fade_time, marker_dict):
         # only key track start if it is not the start of the clip
         if frame1 - context.scene.frame_start > fade_time:
             track.weight = 0
-            context.scene.frame_current = frame1
             track.keyframe_insert(data_path="weight", frame=frame1)
             track.weight = 1
-            context.scene.frame_current = frame2
             track.keyframe_insert(data_path="weight", frame=frame2)
         # now set keyframe for weight 0 at the end of the track
         # but only if it doesnt go until the end of the shot
         if context.scene.frame_end - frame4+1 > fade_time:
             track.keyframe_insert(data_path="weight", frame=frame3)
             track.weight = 0
-            context.scene.frame_current = frame4
             track.keyframe_insert(data_path="weight", frame=frame4)
 
 
