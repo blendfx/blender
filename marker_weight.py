@@ -55,6 +55,7 @@ def get_marker_list(context, selection):
 
 def insert_keyframe(context, fade_time, marker_dict):
     tracks = context.space_data.clip.tracking.tracks
+    current_frame = context.scene.frame_current
     for track, list in marker_dict.items():
         # define keyframe_values
         frame1 = list[0]
@@ -76,6 +77,9 @@ def insert_keyframe(context, fade_time, marker_dict):
             track.weight = 0
             context.scene.frame_current = frame4
             track.keyframe_insert(data_path="weight", frame=frame4)
+    # set the current frame back to where it was
+    context.scene.frame_current = current_frame
+
 
 
 ##############################
