@@ -28,10 +28,12 @@ bl_info = {
     "category": "Tracking"
     }
 
+import typing
+
 import bpy
 from bpy.types import Operator, Panel
 
-def get_marker_list(context, selection):
+def get_marker_list(context, selection: bool) -> typing.Mapping[bpy.types.MovieTrackingTrack, int]:
     """
     Everytime the operator is executed, generate a dictionary with all tracks and
     their markers, if they are not too short and/or are selected
