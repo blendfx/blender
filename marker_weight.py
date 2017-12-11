@@ -22,7 +22,7 @@ bl_info = {
     "version": (0,1),
     "blender": (2, 79, 0),
     "location": "Clip Editor",
-    "description": "Fade in the weight of tracking markers to smooth out the camera path", 
+    "description": "Fade in the weight of tracking markers to smooth out the camera path",
     "warning": "",
     "wiki_url": "",
     "category": "Tracking"
@@ -32,10 +32,10 @@ import bpy
 from bpy.types import Operator, Panel
 
 def get_marker_list(context, selection):
-    '''
+    """
     Everytime the operator is executed, generate a dictionary with all tracks and
     their markers, if they are not too short and/or are selected
-    '''
+    """
     f_start = context.scene.frame_start
     f_end = context.scene.frame_end
     tracks = context.space_data.clip.tracking.tracks
@@ -83,7 +83,7 @@ def insert_keyframe(context, fade_time, marker_dict):
 ##############################
 
 class CLIP_OT_WeightFade(Operator):
-    '''Fade in the weight of selected markers'''
+    """Fade in the weight of selected markers"""
     bl_idname = "clip.weight_fade"
     bl_label = "Fade Marker Weight"
     bl_options = {'REGISTER', 'UNDO'}
@@ -101,7 +101,6 @@ class CLIP_OT_WeightFade(Operator):
         return {'FINISHED'}
 
 
-
 class CLIP_PT_WeightFadePanel(Panel):
     bl_idname = "clip.weight_fade_panel"
     bl_label = "Weight Fade"
@@ -114,10 +113,10 @@ class CLIP_PT_WeightFadePanel(Panel):
         col = layout.column()
         col.operator("clip.weight_fade")
 
+
 ###################
 # REGISTER
 ###################
-
 
 def register():
     bpy.utils.register_class(CLIP_OT_WeightFade)
