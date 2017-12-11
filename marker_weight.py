@@ -22,59 +22,56 @@ bl_info = {
     "version": (0,1),
     "blender": (2, 79, 0),
     "location": "Clip Editor",
-    "description": "Fade in the weight of tracking markers to smooth out the camera path", 
+    "description": "Fade in the weight of tracking markers to smooth out the camera path",
     "warning": "",
     "wiki_url": "",
     "category": "Tracking"
     }
 
+import typing
+
 import bpy
 from bpy.types import Operator, Panel
 
-def get_marker_list(context, selection):
-    '''
+def get_marker_list(context, selection: bool) -> typing.Mapping[bpy.types.MovieTrackingTrack, int]:
+    """
     Everytime the operator is executed, generate a dictionary with all tracks and
     their markers, if they are not too short and/or are selected
-    '''
+    """
     f_start = context.scene.frame_start
     f_end = context.scene.frame_end
     tracks = context.space_data.clip.tracking.tracks
     marker_dict = {}
     for t in tracks:
-        list = []
+        frames = []
         for i in range(f_start, f_end):
             if t.markers.find_frame(i):
-                list.append(i)
-        if len(list)>20:
-            if selection:
-                if t.select:
-                    marker_dict[t] = list
-            else:
-                marker_dict[t] = list
-    return marker_dict 
+                frames.append(i)
+        if len(frames) <= 20:  # skip short tracks
+            continue
+        if not selection or t.select:
+            marker_dict[t] = frames
+    return marker_dict
 
 def insert_keyframe(context, fade_time, marker_dict):
     tracks = context.space_data.clip.tracking.tracks
-    for track, list in marker_dict.items():
+    for track, frames in marker_dict.items():
         # define keyframe_values
-        frame1 = list[0]
-        frame2 = list[0] + fade_time
-        frame3 = list[-2] - fade_time
-        frame4 = list[-2]
+        frame1 = frames[0]
+        frame2 = frames[0] + fade_time
+        frame3 = frames[-2] - fade_time
+        frame4 = frames[-2]
         # only key track start if it is not the start of the clip
         if frame1 - context.scene.frame_start > fade_time:
             track.weight = 0
-            context.scene.frame_current = frame1
             track.keyframe_insert(data_path="weight", frame=frame1)
             track.weight = 1
-            context.scene.frame_current = frame2
             track.keyframe_insert(data_path="weight", frame=frame2)
         # now set keyframe for weight 0 at the end of the track
         # but only if it doesnt go until the end of the shot
         if context.scene.frame_end - frame4+1 > fade_time:
             track.keyframe_insert(data_path="weight", frame=frame3)
             track.weight = 0
-            context.scene.frame_current = frame4
             track.keyframe_insert(data_path="weight", frame=frame4)
 
 
@@ -83,7 +80,7 @@ def insert_keyframe(context, fade_time, marker_dict):
 ##############################
 
 class CLIP_OT_WeightFade(Operator):
-    '''Fade in the weight of selected markers'''
+    """Fade in the weight of selected markers"""
     bl_idname = "clip.weight_fade"
     bl_label = "Fade Marker Weight"
     bl_options = {'REGISTER', 'UNDO'}
@@ -101,7 +98,6 @@ class CLIP_OT_WeightFade(Operator):
         return {'FINISHED'}
 
 
-
 class CLIP_PT_WeightFadePanel(Panel):
     bl_idname = "clip.weight_fade_panel"
     bl_label = "Weight Fade"
@@ -114,10 +110,10 @@ class CLIP_PT_WeightFadePanel(Panel):
         col = layout.column()
         col.operator("clip.weight_fade")
 
+
 ###################
 # REGISTER
 ###################
-
 
 def register():
     bpy.utils.register_class(CLIP_OT_WeightFade)
