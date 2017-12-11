@@ -43,26 +43,24 @@ def get_marker_list(context, selection: bool) -> typing.Mapping[bpy.types.MovieT
     tracks = context.space_data.clip.tracking.tracks
     marker_dict = {}
     for t in tracks:
-        list = []
+        frames = []
         for i in range(f_start, f_end):
             if t.markers.find_frame(i):
-                list.append(i)
-        if len(list)>20:
-            if selection:
-                if t.select:
-                    marker_dict[t] = list
-            else:
-                marker_dict[t] = list
-    return marker_dict 
+                frames.append(i)
+        if len(frames) <= 20:  # skip short tracks
+            continue
+        if not selection or t.select:
+            marker_dict[t] = frames
+    return marker_dict
 
 def insert_keyframe(context, fade_time, marker_dict):
     tracks = context.space_data.clip.tracking.tracks
-    for track, list in marker_dict.items():
+    for track, frames in marker_dict.items():
         # define keyframe_values
-        frame1 = list[0]
-        frame2 = list[0] + fade_time
-        frame3 = list[-2] - fade_time
-        frame4 = list[-2]
+        frame1 = frames[0]
+        frame2 = frames[0] + fade_time
+        frame3 = frames[-2] - fade_time
+        frame4 = frames[-2]
         # only key track start if it is not the start of the clip
         if frame1 - context.scene.frame_start > fade_time:
             track.weight = 0
