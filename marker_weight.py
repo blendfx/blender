@@ -31,7 +31,7 @@ bl_info = {
 import bpy
 from bpy.types import Operator, Panel
 
-def get_marker_list(context, selection):
+def get_marker_list(context):
     '''
     Everytime the operator is executed, generate a dictionary with all tracks and
     their markers, if they are not too short and/or are selected
@@ -40,22 +40,54 @@ def get_marker_list(context, selection):
     f_end = context.scene.frame_end
     tracks = context.space_data.clip.tracking.tracks
     marker_dict = {}
+
     for t in tracks:
-        list = []
-        for i in range(f_start, f_end):
-            if t.markers.find_frame(i):
-                list.append(i)
-        if len(list)>20:
-            if selection:
-                if t.select:
-                    marker_dict[t] = list
-            else:
+        # only operate on selected tracks that are not hidden
+        if t.select and not t.hide:
+            # generate a list of all tracked frames
+            list = []
+            for i in range(f_start, f_end):
+                # first clear the weight of the tracks
+                t.keyframe_delete(data_path="weight", frame=i)
+                if t.markers.find_frame(i):
+                    list.append(i)
+            # if the list is longer than 20, add the list and the track to a dict
+            # (a shorter list wouldn't make much sense)
+            if len(list) > 20:
                 marker_dict[t] = list
     return marker_dict 
 
+
+def select_zero_weighted_tracks(context):
+    f_start = context.scene.frame_start
+    f_end = context.scene.frame_end
+    tracks = context.space_data.clip.tracking.tracks
+
+    current_frame = context.scene.frame_current
+    for t in tracks:
+        t.select = True
+    for f in range(f_start, f_end):
+        context.scene.frame_set(f)
+        for t in tracks:
+            if t.weight>0:
+                t.select = False
+    context.scene.frame_current = current_frame
+
+
+def delete_weight_keyframes(context):
+    f_start = context.scene.frame_start
+    f_end = context.scene.frame_end
+    tracks = context.space_data.clip.tracking.tracks
+
+    for t in tracks:
+        if t.select and not t.hide:
+            for i in range(f_start, f_end):
+                t.keyframe_delete(data_path="weight", frame=i)
+                t.weight = 0
+
+
 def insert_keyframe(context, fade_time, marker_dict):
     tracks = context.space_data.clip.tracking.tracks
-    current_frame = context.scene.frame_current
     for track, list in marker_dict.items():
         # define keyframe_values
         frame1 = list[0]
@@ -65,26 +97,50 @@ def insert_keyframe(context, fade_time, marker_dict):
         # only key track start if it is not the start of the clip
         if frame1 - context.scene.frame_start > fade_time:
             track.weight = 0
-            context.scene.frame_current = frame1
             track.keyframe_insert(data_path="weight", frame=frame1)
             track.weight = 1
-            context.scene.frame_current = frame2
             track.keyframe_insert(data_path="weight", frame=frame2)
         # now set keyframe for weight 0 at the end of the track
         # but only if it doesnt go until the end of the shot
         if context.scene.frame_end - frame4+1 > fade_time:
             track.keyframe_insert(data_path="weight", frame=frame3)
             track.weight = 0
-            context.scene.frame_current = frame4
             track.keyframe_insert(data_path="weight", frame=frame4)
-    # set the current frame back to where it was
-    context.scene.frame_current = current_frame
 
 
 
 ##############################
 # CLASSES
 ##############################
+class CLIP_OT_ClearWeightKeyframes(Operator):
+    '''Select all tracks that have a marker weight of zero through the entire shot'''
+    bl_idname = "clip.clear_weight_keyframes"
+    bl_label = "Clear Weight Keyframes"
+
+    @classmethod
+    def poll(cls, context):
+        space = context.space_data
+        return (space.type == 'CLIP_EDITOR')
+
+    def execute(self, context):
+        delete_weight_keyframes(context)
+        return {'FINISHED'}
+
+
+class CLIP_OT_SelectZeroWeightedTracks(Operator):
+    '''Select all tracks that have a marker weight of zero through the entire shot'''
+    bl_idname = "clip.select_zero_weighted_tracks"
+    bl_label = "Select Zero Weighted Tracks"
+
+    @classmethod
+    def poll(cls, context):
+        space = context.space_data
+        return (space.type == 'CLIP_EDITOR')
+
+    def execute(self, context):
+        select_zero_weighted_tracks(context)
+        return {'FINISHED'}
+
 
 class CLIP_OT_WeightFade(Operator):
     '''Fade in the weight of selected markers'''
@@ -101,7 +157,7 @@ class CLIP_OT_WeightFade(Operator):
         return (space.type == 'CLIP_EDITOR')
 
     def execute(self, context):
-        insert_keyframe(context, self.fade_time, get_marker_list(context, True))
+        insert_keyframe(context, self.fade_time, get_marker_list(context))
         return {'FINISHED'}
 
 
@@ -118,13 +174,16 @@ class CLIP_PT_WeightFadePanel(Panel):
         col = layout.column()
         col.operator("clip.weight_fade")
 
+
+
 ###################
 # REGISTER
 ###################
 
-
 def register():
     bpy.utils.register_class(CLIP_OT_WeightFade)
+    bpy.utils.register_class(CLIP_OT_SelectZeroWeightedTracks)
+    bpy.utils.register_class(CLIP_OT_ClearWeightKeyframes)
     bpy.utils.register_class(CLIP_PT_WeightFadePanel)
 
     wm = bpy.context.window_manager
@@ -133,6 +192,8 @@ def register():
 
 def unregister():
     bpy.utils.unregister_class(CLIP_OT_WeightFade)
+    bpy.utils.unregister_class(CLIP_OT_SelectZeroWeightedTracks)
+    bpy.utils.unregister_class(CLIP_OT_ClearWeightKeyframes)
     bpy.utils.unregister_class(CLIP_PT_WeightFadePanel)
 
 if __name__ == "__main__":
