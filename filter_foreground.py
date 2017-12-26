@@ -97,21 +97,22 @@ def get_average_slope(context, track, frame, evaluation_time):
 
 
 def filter_track_ends(context, valid_tracks, threshold, evaluation_time):
+    # compare the last frame's slope with the ones before, and if needed, mute it.
     to_clean = {}
     for track, list in valid_tracks.items():
-        track.select = False
-        f = list[-1] # could also be list[0], but wanna make it explicit that it's last frame
+        f = list[-1] 
+        # first get the slope of the current track on current frame
         track_slope = get_slope(context, track, f)
         # if the track is as long as the evaluation time, calculate the average slope
         if check_evaluation_time(track, f, evaluation_time):
             average_slope = Vector().to_2d()
             for i in range(f-evaluation_time, f):
-                # get the slopes of all markers during the evaluation time
+                # get the slopes of all frames during the evaluation time
                 av_slope = get_slope(context, track, i)
                 average_slope += av_slope 
-            average_slope = average_slope / (evaluation_time)
+            average_slope = average_slope / evaluation_time
             # check abs difference for both values in the vector
-            for i in [0,1]:
+            for i in [0,2]:
                 # if the difference between average_slope and track_slope on any axis is above threshold,
                 # add to the to_clean dictionary
                 if not track in to_clean and get_difference(track_slope, average_slope, i) > threshold:
@@ -219,8 +220,10 @@ class CLIP_OT_filter_foreground(Operator):
         return (sc.type == 'CLIP_EDITOR') and sc.clip
 
     def execute(self, context):
+        scene = context.scene
         tracks = context.space_data.clip.tracking.tracks
-        filter_foreground(context, tracks, get_valid_tracks(context.scene, tracks), self.evaluation_time, self.threshold)
+        valid_tracks = get_valid_tracks(scene, tracks)
+        filter_foreground(context, tracks, valid_tracks, self.evaluation_time, self.threshold)
         return {'FINISHED'}
 
 
