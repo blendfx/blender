@@ -3,9 +3,8 @@ from bpy.types import Operator
 from mathutils import Vector
 
 def get_marker_coordinates_in_pixels(context, track, frame_number):
-    # first get the clip size coordinates
     width, height = context.space_data.clip.size
-    # then return the marker coordinates in relation to the clip
+    # return the marker coordinates in relation to the clip
     marker = track.markers.find_frame(frame_number)
     vector = Vector((marker.co[0] * width, marker.co[1] * height))
     return vector
@@ -68,25 +67,6 @@ def get_valid_tracks(scene, tracks):
     return valid_tracks
 
 
-def relevant_tracks(context, frame, track):
-    # this returns a list of markers that are valid on current frame
-    # and the frame before, excluding the specific track
-    tracks = []
-    for t in context.space_data.clip.tracking.tracks:
-        if not t.markers.find_frame(frame):
-            continue
-        if not t.markers.find_frame(frame-1):
-            continue
-        if t.markers.find_frame(frame).mute:
-            continue
-        if t.markers.find_frame(frame-1).mute:
-            continue
-        if t == track:
-            continue
-        tracks.append(t)
-        return tracks
-
-
 def get_average_slope(context, track, frame, evaluation_time):
     average = Vector().to_2d()
     for f in range(frame-evaluation_time, frame):
@@ -96,8 +76,10 @@ def get_average_slope(context, track, frame, evaluation_time):
     return average
 
 
-def filter_track_ends(context, valid_tracks, threshold, evaluation_time):
+def filter_track_ends(context, threshold, evaluation_time):
     # compare the last frame's slope with the ones before, and if needed, mute it.
+    tracks = context.space_data.clip.tracking.tracks
+    valid_tracks = get_valid_tracks(context.scene, tracks)
     to_clean = {}
     for track, list in valid_tracks.items():
         f = list[-1] 
@@ -112,27 +94,22 @@ def filter_track_ends(context, valid_tracks, threshold, evaluation_time):
                 average_slope += av_slope 
             average_slope = average_slope / evaluation_time
             # check abs difference for both values in the vector
-            for i in [0,2]:
+            for i in [0,1]:
                 # if the difference between average_slope and track_slope on any axis is above threshold,
                 # add to the to_clean dictionary
                 if not track in to_clean and get_difference(track_slope, average_slope, i) > threshold:
                     to_clean[track] = f
-        else:
-            print("track not continuous")
     # now we can disable the last frame of the identified tracks
     for track, frame in to_clean.items():
-        print(frame, track.name)
+        print("cleaned ", track.name, "on frame ", frame)
         track.markers.find_frame(frame).mute=True
+    return len(to_clean)
 
 
-def filter_foreground(context, tracks, valid_tracks, evaluation_time, threshold):
-    # we want to filter tracks that move a lot faster than others towards the end of the track
-    # get the average slope of the entire track of all valid markers
-    # since foreground markers will leave the frame earlier, find the ones that end during the shot
-    # get average slope over evaluation time for all others from his frame
-    # if it is bigger , select it
-    scene = context.scene
-    tracks = get_valid_tracks(scene, tracks)
+def filter_foreground(context, evaluation_time, threshold):
+    # filter tracks that move a lot faster than others towards the end of the track
+    tracks = context.space_data.clip.tracking.tracks
+    valid_tracks = get_valid_tracks(context.scene, tracks)
     foreground = []
     for track, list in valid_tracks.items():
         f = list[-1]
@@ -151,7 +128,7 @@ def filter_foreground(context, tracks, valid_tracks, evaluation_time, threshold)
                 global_average += other_average
             global_average = global_average / len(currently_valid_tracks)
             print(track.name, f, track_average, global_average)
-            for i in range(0,2):
+            for i in [0,1]:
                 difference = get_difference(track_average, global_average, i) * evaluation_time
                 print(track.name, i, difference)
                 if difference > threshold:
@@ -188,9 +165,9 @@ class CLIP_OT_filter_track_ends(Operator):
     def execute(self, context):
         # first to a minimal cleanup
         bpy.ops.clip.clean_tracks(frames=3, error=0, action='DELETE_SEGMENTS')
-        tracks = context.space_data.clip.tracking.tracks
-        valid_tracks = get_valid_tracks(context.scene, tracks)
-        filter_track_ends(context, valid_tracks, self.threshold, self.evaluation_time)
+        num_tracks = filter_track_ends(context, self.threshold, self.evaluation_time)
+        self.report({'INFO'}, "Muted %d track ends" % num_tracks)
+        
         return {'FINISHED'}
 
 
@@ -221,9 +198,7 @@ class CLIP_OT_filter_foreground(Operator):
 
     def execute(self, context):
         scene = context.scene
-        tracks = context.space_data.clip.tracking.tracks
-        valid_tracks = get_valid_tracks(scene, tracks)
-        filter_foreground(context, tracks, valid_tracks, self.evaluation_time, self.threshold)
+        filter_foreground(context, self.evaluation_time, self.threshold)
         return {'FINISHED'}
 
 
