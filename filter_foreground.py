@@ -144,10 +144,10 @@ class CLIP_OT_filter_track_ends(Operator):
     bl_options = {'REGISTER', 'UNDO'}
     
     evaluation_time = bpy.props.IntProperty(
-        name="Evalutation Time",
+        name="Evaluation Time",
         default=10,
         min=0,
-        max=2000,
+        max=1000,
         description="The length of the last part of the track that should be filtered")
 
     threshold = bpy.props.IntProperty(
@@ -163,11 +163,10 @@ class CLIP_OT_filter_track_ends(Operator):
         return (sc.type == 'CLIP_EDITOR') and sc.clip
 
     def execute(self, context):
-        # first to a minimal cleanup
+        # first do a minimal cleanup
         bpy.ops.clip.clean_tracks(frames=3, error=0, action='DELETE_SEGMENTS')
         num_tracks = filter_track_ends(context, self.threshold, self.evaluation_time)
         self.report({'INFO'}, "Muted %d track ends" % num_tracks)
-        
         return {'FINISHED'}
 
 
@@ -178,10 +177,10 @@ class CLIP_OT_filter_foreground(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     evaluation_time = bpy.props.IntProperty(
-        name="Evalutation Time",
-        default=50,
+        name="Evaluation Time",
+        default=20,
         min=0,
-        max=2000,
+        max=1000,
         description="The length of the last part of the track that should be filtered")
 
     threshold = bpy.props.IntProperty(
