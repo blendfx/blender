@@ -29,7 +29,7 @@ bl_info = {
     }
 
 import bpy
-from bpy.types import Operator, Panel
+from bpy.types import Operator, Panel, Menu
 from mathutils import Vector
 
 def get_marker_coordinates_in_pixels(context, track, frame_number):
@@ -241,7 +241,7 @@ class CLIP_OT_filter_track_ends(Operator):
 
     def execute(self, context):
         # first do a minimal cleanup
-        bpy.ops.clip.clean_tracks(frames=3, error=0, action='DELETE_TRACK')
+        # bpy.ops.clip.clean_tracks(frames=3, error=0, action='DELETE_TRACK')
         num_tracks = self.filter_track_ends(context, self.threshold, self.eval_time)
         self.report({'INFO'}, "Muted %d track ends" % num_tracks)
         return {'FINISHED'}
@@ -249,7 +249,7 @@ class CLIP_OT_filter_track_ends(Operator):
 
 class CLIP_OT_select_foreground(Operator):
     '''Select Foreground Tracks with faster movement'''
-    bl_idname = "clip.select_foreground_track"
+    bl_idname = "clip.select_foreground"
     bl_label = "Select Foreground Tracks"
     bl_options = {'REGISTER', 'UNDO'}
 
@@ -384,10 +384,28 @@ class CLIP_PT_weight_fade_panel(Panel):
         col.operator("clip.weight_fade")
 
 
+class CLIP_PIE_tracking_tools(Menu):
+    bl_label = "Tracking Tools"
+
+    def draw(self, context):
+        layout = self.layout
+        pie = layout.menu_pie()
+        # Select Zero Weighted Tracks
+        pie.operator("clip.select_zero_weighted_tracks", icon="GHOST_ENABLED")
+        # Fade Marker Weight
+        pie.operator("clip.fade_marker_weight", icon="SMOOTHCURVE")
+        # Copy Color
+        pie.operator("clip.track_copy_color", icon="COLOR")
+        pie.operator("clip.filter_track_ends")
+        pie.operator("clip.select_foreground")
+        pie.operator("clip.clear_weight_animation")
+        pie.operator("clip.weight_fade")
+
 
 ###################
 # REGISTER
 ###################
+addon_keymaps = []
 
 classes = (
     CLIP_OT_weight_fade,
@@ -395,16 +413,23 @@ classes = (
     CLIP_OT_filter_track_ends,
     CLIP_OT_clear_weight_animation,
     CLIP_OT_select_zero_weighted_tracks,
-    CLIP_PT_weight_fade_panel
+    CLIP_PT_weight_fade_panel,
+    CLIP_PIE_tracking_tools
     )
 
 def register():
+    addon_keymaps.clear()
     for c in classes:
         bpy.utils.register_class(c)
 
     wm = bpy.context.window_manager
     km = wm.keyconfigs.addon.keymaps.new(name='Clip Editor', space_type='CLIP_EDITOR')
     kmi = km.keymap_items.new('clip.weight_fade', 'W', 'PRESS', alt=True)
+
+    if wm.keyconfigs.addon:
+        kmi = km.keymap_items.new("wm.call_menu_pie", 'E', 'PRESS', shift=True)
+        kmi.properties.name = "CLIP_PIE_tracking_tools"
+        addon_keymaps.append((km, kmi))
 
 def unregister():
     for c in classes:
