@@ -32,6 +32,16 @@ import bpy
 from bpy.types import Operator, Panel, Menu
 from mathutils import Vector
 
+def invisible_selected(context, tracks):
+    frame = context.scene.frame_current
+    invisible_tracks = []
+    if not context.space_data.show_disabled:
+        for t in tracks:
+            if t.select and not t.markers.find_frame(frame):
+                invisible_tracks.append(t)
+    return invisible_tracks
+
+
 def get_marker_coordinates_in_pixels(context, track, frame_number):
     width, height = context.space_data.clip.size
     # return the marker coordinates in relation to the clip
@@ -53,13 +63,6 @@ def get_difference(track_slope, average_slope, axis):
     # rather use abs difference, to be able to better compare the actual value
     difference = abs(difference)
     return difference
-
-
-def get_slope(context, track, frame):
-    v1 = marker_velocity(context, track, frame)
-    v2 = marker_velocity(context, track, frame-1)
-    slope = v1-v2
-    return slope
 
 
 def check_eval_time(track, frame, eval_time):
@@ -100,6 +103,13 @@ def get_valid_tracks(scene, tracks):
     return valid_tracks
 
 
+def get_slope(context, track, frame):
+    v1 = marker_velocity(context, track, frame)
+    v2 = marker_velocity(context, track, frame-1)
+    slope = v1-v2
+    return slope
+
+
 def get_average_slope(context, track, frame, eval_time):
     average = Vector().to_2d()
     for f in range(frame-eval_time, frame):
@@ -129,7 +139,7 @@ def get_marker_list(scene, tracks, fade_time):
     return marker_dict 
 
 
-def clear_weight_animation(scene, tracks):
+def clear_weight_animation(scene, tracks, weight):
     zero_weighted = find_zero_weighted_tracks(scene, tracks)
     for t in tracks:
         if t.select and not t.hide:
@@ -140,7 +150,7 @@ def clear_weight_animation(scene, tracks):
                     pass
             # set the weight back to 1 unless it's a zero weighted track
             if not t in zero_weighted: 
-                t.weight = 1
+                t.weight = weight
 
 
 def find_zero_weighted_tracks(scene, tracks):
@@ -155,7 +165,6 @@ def find_zero_weighted_tracks(scene, tracks):
                 list.remove(t)
     scene.frame_set(current_frame)
     return list
-
 
 
 def insert_keyframe(scene, fade_time, marker_dict):
@@ -234,10 +243,11 @@ class CLIP_OT_filter_track_ends(Operator):
             print("cleaned ", track.name, "on frame ", frame)
             track.markers.find_frame(frame).mute=True
         return len(to_clean)
-        @classmethod
-        def poll(cls, context):
-            sc = context.space_data
-            return (sc.type == 'CLIP_EDITOR') and sc.clip
+
+    @classmethod
+    def poll(cls, context):
+        space = context.space_data
+        return (space.type == 'CLIP_EDITOR') and space.clip
 
     def execute(self, context):
         # first do a minimal cleanup
@@ -300,8 +310,8 @@ class CLIP_OT_select_foreground(Operator):
 
     @classmethod
     def poll(cls, context):
-        sc = context.space_data
-        return (sc.type == 'CLIP_EDITOR') and sc.clip
+        space = context.space_data
+        return (space.type == 'CLIP_EDITOR') and space.clip
 
     def execute(self, context):
         scene = context.scene
@@ -317,7 +327,7 @@ class CLIP_OT_select_zero_weighted_tracks(Operator):
     @classmethod
     def poll(cls, context):
         space = context.space_data
-        return (space.type == 'CLIP_EDITOR')
+        return (space.type == 'CLIP_EDITOR') and space.clip
 
     def execute(self, context):
         scene = context.scene
@@ -340,18 +350,19 @@ class CLIP_OT_weight_fade(Operator):
     @classmethod
     def poll(cls, context):
         space = context.space_data
-        return (space.type == 'CLIP_EDITOR')
+        return (space.type == 'CLIP_EDITOR') and space.clip
 
     def execute(self, context):
         scene = context.scene
         tracks = context.space_data.clip.tracking.tracks
         # first clear any previous weight animation
-        clear_weight_animation(scene, tracks)
+        clear_weight_animation(scene, tracks, 1)
         # then find out which tracks to operate on
         marker_dict = get_marker_list(scene, tracks, self.fade_time)
         # then insert the weight keyframes
         insert_keyframe(scene, self.fade_time, marker_dict)
         return {'FINISHED'}
+
 
 class CLIP_OT_clear_weight_animation(Operator):
     '''Clear any weight animation of the selected tracks'''
@@ -362,12 +373,12 @@ class CLIP_OT_clear_weight_animation(Operator):
     @classmethod
     def poll(cls, context):
         space = context.space_data
-        return (space.type == 'CLIP_EDITOR')
+        return (space.type == 'CLIP_EDITOR') and space.clip
 
     def execute(self, context):
         scene = context.scene
         tracks = context.space_data.clip.tracking.tracks
-        clear_weight_animation(scene, tracks)
+        clear_weight_animation(scene, tracks, 1)
         return {'FINISHED'}
 
 
@@ -384,6 +395,60 @@ class CLIP_PT_weight_fade_panel(Panel):
         col.operator("clip.weight_fade")
 
 
+class CLIP_OT_mesh_reconstruction(Operator):
+    ''' Create a face from selected tracks. Needs a camera solve. Works best for flat surfaces'''
+    bl_idname = "clip.mesh_reconstruction"
+    bl_label = "Mesh Reconstruction"
+    bl_options = {'UNDO', 'REGISTER'}
+
+    @classmethod
+    def poll(cls, context):
+        space = context.space_data
+        return (space.type == "CLIP_EDITOR") and space.clip
+
+    def execute(self, context):
+        # make a mesh from selected markers, called "Tracks"
+        bpy.ops.clip.bundles_to_mesh()
+        # create a plane from the single vertices
+        ob = bpy.data.objects["Tracks"]
+        bpy.context.scene.objects.active = ob
+        ob.select = True
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
+        bpy.ops.mesh.edge_face_add()
+        bpy.ops.object.mode_set(mode="OBJECT")
+        # rename the object so that you can create new objects (called "Tracks")
+        ob.name = "TrackMesh"
+        return {'FINISHED'}
+
+class CLIP_OT_create_zero_weighted_tracks(Operator):
+    bl_idname = "clip.create_zero_weighted_tracks"
+    bl_label = "Create Zero Weighted Tracks"
+
+    @classmethod
+    def poll(cls, context):
+        space = context.space_data
+        return (space.type == "CLIP_EDITOR") and space.clip
+    
+    def execute(self, context):
+        scene = context.scene
+        tracking = context.space_data.clip.tracking
+        tracks = tracking.tracks
+        # find out if any markers are selected
+        selected = []
+        invisibles = invisible_selected(context, tracks)
+        for t in tracks:
+            if t.select and not t.hide and not t in invisibles:
+                selected.append(t)
+        # if one or more markers are selected, clear the animation and set them to zero
+        if len(selected) > 0:
+            # make sure we don't operate on markers that rae currently not visible
+            clear_weight_animation(scene, selected, 0)
+        # otherwise set the default weight to zero
+        else:
+            tracking.settings.default_weight = 0
+        return {'FINISHED'}
+
 class CLIP_PIE_tracking_tools(Menu):
     bl_label = "Tracking Tools"
 
@@ -391,15 +456,16 @@ class CLIP_PIE_tracking_tools(Menu):
         layout = self.layout
         pie = layout.menu_pie()
         # Select Zero Weighted Tracks
-        pie.operator("clip.select_zero_weighted_tracks", icon="GHOST_ENABLED")
+        pie.operator("clip.clear_weight_animation", icon="ANIM")
         # Fade Marker Weight
-        pie.operator("clip.fade_marker_weight", icon="SMOOTHCURVE")
+        pie.operator("clip.weight_fade", icon="PMARKER_SEL")
         # Copy Color
+        pie.operator("clip.filter_track_ends", icon="IPO_ELASTIC")
+        pie.operator("clip.select_foreground", icon="IPO")
+        pie.operator("clip.select_zero_weighted_tracks", icon="GHOST_ENABLED")
         pie.operator("clip.track_copy_color", icon="COLOR")
-        pie.operator("clip.filter_track_ends")
-        pie.operator("clip.select_foreground")
-        pie.operator("clip.clear_weight_animation")
-        pie.operator("clip.weight_fade")
+        pie.operator("clip.mesh_reconstruction", icon="OUTLINER_OB_MESH")
+        pie.operator("clip.create_zero_weighted_tracks")
 
 
 ###################
@@ -413,6 +479,8 @@ classes = (
     CLIP_OT_filter_track_ends,
     CLIP_OT_clear_weight_animation,
     CLIP_OT_select_zero_weighted_tracks,
+    CLIP_OT_create_zero_weighted_tracks,
+    CLIP_OT_mesh_reconstruction,
     CLIP_PT_weight_fade_panel,
     CLIP_PIE_tracking_tools
     )
@@ -423,7 +491,7 @@ def register():
         bpy.utils.register_class(c)
 
     wm = bpy.context.window_manager
-    km = wm.keyconfigs.addon.keymaps.new(name='Clip Editor', space_type='CLIP_EDITOR')
+    km = wm.keyconfigs.addon.keymaps.new(name='Clip', space_type='CLIP_EDITOR')
     kmi = km.keymap_items.new('clip.weight_fade', 'W', 'PRESS', alt=True)
 
     if wm.keyconfigs.addon:
