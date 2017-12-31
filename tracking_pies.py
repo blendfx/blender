@@ -1,4 +1,3 @@
-# ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  This program is free software; you can redistribute it and/or
 #  modify it under the terms of the GNU General Public License
@@ -32,108 +31,12 @@ bl_info = {
 
 import bpy
 from bpy.types import Menu, Operator
-import tracking_tools
-def get_marker_list(scene, tracks):
-    '''
-    Everytime the operator is executed, generate a dictionary with all tracks and
-    their markers, if they are not too short and/or are selected
-    '''
-    marker_dict = {}
-
-    for t in tracks:
-        # only operate on selected tracks that are not hidden
-        if t.select and not t.hide:
-            # generate a list of all tracked frames
-            list = []
-            for i in range(scene.frame_start, scene.frame_end):
-                # first clear the weight of the tracks
-                t.keyframe_delete(data_path="weight", frame=i)
-                if t.markers.find_frame(i):
-                    list.append(i)
-            # if the list is longer than 20, add the list and the track to a dict
-            # (a shorter list wouldn't make much sense)
-            if len(list) > 20:
-                marker_dict[t] = list
-    return marker_dict 
-
-
-def select_zero_weighted_tracks(scene, tracks):
-    current_frame = scene.frame_current
-    for t in tracks:
-        t.select = True
-    for f in range(scene.frame_start, scene.frame_end):
-        scene.frame_set(f)
-        for t in tracks:
-            if t.weight>0:
-                t.select = False
-    scene.frame_current = current_frame
-
-
-def insert_keyframe(scene, fade_time, marker_dict):
-    current_frame = scene.frame_current
-    for track, list in marker_dict.items():
-        # define keyframe_values
-        frame1 = list[0]
-        frame2 = list[0] + fade_time
-        frame3 = list[-2] - fade_time
-        frame4 = list[-2]
-        # only key track start if it is not the start of the clip
-        if frame1 - scene.frame_start > fade_time:
-            track.weight = 0
-            track.keyframe_insert(data_path="weight", frame=frame1)
-            track.weight = 1
-            track.keyframe_insert(data_path="weight", frame=frame2)
-        # now set keyframe for weight 0 at the end of the track
-        # but only if it doesnt go until the end of the shot
-        if scene.frame_end - frame4+1 > fade_time:
-            track.keyframe_insert(data_path="weight", frame=frame3)
-            track.weight = 0
-            track.keyframe_insert(data_path="weight", frame=frame4)
-    scene.frame_set(current_frame)
 
 
 
 ##############################
 # CLASSES
 ##############################
-
-
-class CLIP_OT_select_zero_weighted(Operator):
-    '''Select all tracks that have a marker weight of zero through the entire shot'''
-    bl_idname = "clip.select_zero_weighted_tracks"
-    bl_label = "Select Zero Weighted Tracks"
-
-    @classmethod
-    def poll(cls, context):
-        space = context.space_data
-        return (space.type == 'CLIP_EDITOR')
-
-    def execute(self, context):
-        tracks = context.space_data.clip.tracking.tracks
-        select_zero_weighted_tracks(context.scene, tracks)
-        return {'FINISHED'}
-
-
-class CLIP_OT_weight_fade(Operator):
-    '''Fade in the weight of selected markers'''
-    bl_idname = "clip.fade_marker_weight"
-    bl_label = "Fade Marker Weight"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    fade_time = bpy.props.IntProperty(name="Fade Time",
-            default=10, min=0, max=100)
-
-    @classmethod
-    def poll(cls, context):
-        space = context.space_data
-        return (space.type == 'CLIP_EDITOR')
-
-    def execute(self, context):
-        scene = context.scene
-        tracks = context.space_data.clip.tracking.tracks
-        insert_keyframe(scene, self.fade_time, get_marker_list(scene, tracks))
-        return {'FINISHED'}
-
 
 
 class CLIP_PIE_refine_pie(Menu):
@@ -362,23 +265,6 @@ class CLIP_PIE_timecontrol_pie(Menu):
         pie.operator("screen.frame_offset", text="Next Frame", icon='TRIA_RIGHT').delta = 1
 
 
-class CLIP_PIE_tracking_tools(Menu):
-    # Tracking Tools
-    bl_label = "Tracking Tools"
-
-    def draw(self, context):
-        layout = self.layout
-        pie = layout.menu_pie()
-        # Select Zero Weighted Tracks
-        pie.operator("clip.select_zero_weighted_tracks", icon="GHOST_ENABLED")
-        # Fade Marker Weight
-        pie.operator("clip.fade_marker_weight", icon="SMOOTHCURVE")
-        # Copy Color
-        pie.operator("clip.track_copy_color", icon="COLOR")
-        pie.operator("clip.filter_track_ends")
-        pie.operator("clip.select_foreground")
-        pie.operator("clip.clear_weight_animation")
-        pie.operator("clip.weight_fade")
 
 addon_keymaps = []
 
@@ -393,8 +279,7 @@ classes = (
     CLIP_PIE_refine_pie,
     CLIP_PIE_reconstruction_pie,
     CLIP_PIE_clipsetup_pie,
-    CLIP_PIE_timecontrol_pie,
-    CLIP_PIE_tracking_tools
+    CLIP_PIE_timecontrol_pie
 )
 
 
