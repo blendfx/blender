@@ -29,7 +29,6 @@ bl_info = {
     }
 
 import bpy
-from bpy.props import (IntProperty)
 from bpy.types import Menu
 from bpy.types import Operator
 
@@ -45,7 +44,8 @@ def check_if_empty(context):
         return True
 
 def group_items(self, context):
-    return [(g.name, g.name, g.name) for g in bpy.data.groups]
+    items = [(g.name, g.name, g.name) for g in bpy.data.groups] 
+    return items 
 
 def assign_group(self, context):
     for ob in context.selected_objects:
@@ -54,9 +54,9 @@ def assign_group(self, context):
             ob.dupli_group = None
         else:
             # now that we know that there is scene.group, assign it to the active object
-            g = bpy.data.groups[context.scene.group]
+            group = bpy.data.groups[context.scene.group]
             ob.dupli_type = 'GROUP'
-            ob.dupli_group = g
+            ob.dupli_group = group
 
 
 class VIEW3D_OT_DupliOffset(Operator):
@@ -66,7 +66,7 @@ class VIEW3D_OT_DupliOffset(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     # i copied this class from a blender UI script from the web, should be in blender/release somewhere
-    group = IntProperty(
+    group_index = bpy.props.IntProperty(
             name="Group",
             description="Group index to set offset for",
             default=0,
@@ -79,16 +79,14 @@ class VIEW3D_OT_DupliOffset(Operator):
     def execute(self, context):
         scene = context.scene
         ob = context.active_object
-        group = self.group
+        group = self.group_index
 
-        # check if there are any groups at all, otherwise there'll be an error
-        if len(ob.users_group)>0:
-            ob.users_group[group].dupli_offset = scene.cursor_location
+        ob.users_group[group].dupli_offset = scene.cursor_location
         return {'FINISHED'}
 
 
 class VIEW3D_OT_NameGroupFromObject(Operator):
-    ''' Set Group Name from Object Name '''
+    ''' Set Group Name from Object Name (only if it's part of only 1 group)'''
     bl_idname = "object.name_group_from_object"
     bl_label = "GroupName from Object"
 
@@ -105,7 +103,7 @@ class VIEW3D_OT_NameGroupFromObject(Operator):
 
 
 class VIEW3D_OT_NameObjectFromGroup(Operator):
-    ''' Set Object Name from Group Name '''
+    ''' Set Object Name from Group Name (only it it's part of only 1 group)'''
     bl_idname = "object.name_object_from_group"
     bl_label = "ObjectName from Group"
 
@@ -119,7 +117,6 @@ class VIEW3D_OT_NameObjectFromGroup(Operator):
             if not len(ob.users_group) > 1:
                 ob.name = ob.users_group[0].name
         return {'FINISHED'} 
-
 
 
 
