@@ -46,11 +46,9 @@ class MASK_setup_masking_scene(Operator):
     def _needSetupNodes(context):
         scene = context.scene
         tree = scene.node_tree
-
         if not tree:
             # No compositor node tree found, time to create it!
             return True
-
         for node in tree.nodes:
             if node.type in {'MOVIECLIP'}:
                 return False
@@ -62,7 +60,6 @@ class MASK_setup_masking_scene(Operator):
             return False
         types = [node.type for node in tree.nodes]
         types.sort()
-
         if types[0] == 'COMPOSITE' and types[1] == 'R_LAYERS':
             while tree.nodes:
                 tree.nodes.remove(tree.nodes[0])
@@ -85,18 +82,14 @@ class MASK_setup_masking_scene(Operator):
         scene.use_nodes = True
         tree = scene.node_tree
         clip = sc.clip
-
         self._wipeDefaultNodes(tree)
-
         return {'FINISHED'}
 
     def execute(self, context):
         scene = context.scene
         current_active_layer = scene.active_layer
-
         self._setupScene(context)
         self._setupNodes(context)
-
         return {'FINISHED'}
 
 
@@ -106,9 +99,7 @@ class MASK_newmasklayer(Operator):
     bl_label = "New Masklayer"
 
     def execute(self, context):
-
-        sc = context.space_data
-        mask = sc.mask
+        mask = context.space_data.mask
         active_layer = mask.layers.active
         if active_layer:
             active_layer.hide_select=True
@@ -122,8 +113,7 @@ class MASK_set_to_add(Operator):
     bl_label = "Set Add"
 
     def execute(self, context):
-        sc = context.space_data
-        mask = sc.mask
+        mask = context.space_data.mask
         active_layer = mask.layers.active
         active_layer.blend="MERGE_ADD"
         return {'FINISHED'}
@@ -135,8 +125,7 @@ class MASK_lock_inactive_layers(Operator):
     bl_label = "Lock Inactive Layers"
 
     def execute(self, context):
-        sc = context.space_data
-        mask = sc.mask
+        mask = context.space_data.mask
         active_layer = mask.layers.active
         for ml in mask.layers:
             ml.hide_select = True
@@ -170,16 +159,13 @@ class MASK_set_marker_drawtype(Operator):
         return {'FINISHED'}
         
       
-
-    
 class MASK_set_to_subtract(Operator):
     """docstring for MASK_newmasklayer"""
     bl_idname = "mask.set_subtract"
     bl_label = "Set Subtract"
 
     def execute(self, context):
-        sc = context.space_data
-        mask = sc.mask
+        mask = context.space_data.mask
         active_layer = mask.layers.active
         active_layer.blend = "MERGE_SUBTRACT"
         return {'FINISHED'}
@@ -212,7 +198,6 @@ class CLIP_PIE_mask_editing(Menu):
 
     def draw(self, context):
         layout = self.layout
-
         pie = layout.menu_pie()
         pie.operator("mask.handle_type_set", icon='IPO_BEZIER')
         pie.operator("mask.cyclic_toggle", icon="CURVE_BEZCIRCLE")
@@ -230,11 +215,10 @@ class CLIP_PIE_masklayers(Menu):
     bl_idname = "clip.masklayer_pie"
 
     def draw(self, context):
-        layout = self.layout
-        sc = context.space_data
-        mask = sc.mask
+        mask = context.space_data.mask
         active_layer = mask.layers.active
 
+        layout = self.layout
         pie = layout.menu_pie()
         pie.operator("mask.primitive_square_add", icon='MESH_PLANE')
         pie.operator("mask.primitive_circle_add", icon='MESH_CIRCLE')
@@ -248,20 +232,22 @@ class CLIP_PIE_masklayers(Menu):
         
 
 ########## register ############
+classes = (
+    CLIP_PIE_mask_editing,
+    CLIP_PIE_masklayers,
+    MASK_lock_inactive_layers,
+    MASK_newmasklayer,
+    MASK_set_to_subtract,
+    MASK_set_to_add,
+    MASK_setup_masking_scene,
+    MASK_set_drawtype,
+    MASK_set_marker_drawtype,
+    MASK_clear_keyframes,
+    )
 
 def register():
-    bpy.utils.register_class(CLIP_PIE_mask_editing)
-    bpy.utils.register_class(CLIP_PIE_masklayers)
-    bpy.utils.register_class(MASK_lock_inactive_layers)
-    bpy.utils.register_class(MASK_newmasklayer)
-    bpy.utils.register_class(MASK_set_to_subtract)
-    bpy.utils.register_class(MASK_set_to_add)
-    bpy.utils.register_class(MASK_setup_masking_scene)
-    bpy.utils.register_class(MASK_set_drawtype)
-    bpy.utils.register_class(MASK_set_marker_drawtype)
-    bpy.utils.register_class(MASK_clear_keyframes)
-
-
+    for c in classes:
+        bpy.utils.register_class(c)
 
     wm = bpy.context.window_manager
     km = wm.keyconfigs.addon.keymaps.new(name='Mask Editing')
@@ -272,20 +258,8 @@ def register():
 
 
 def unregister():
-   
-    bpy.utils.unregister_class(CLIP_PIE_masklayers)
-    bpy.utils.unregister_class(CLIP_PIE_mask_editing)
-    bpy.utils.unregister_class(MASK_lock_inactive_layers)
-    bpy.utils.unregister_class(MASK_newmasklayer)
-    bpy.utils.unregister_class(MASK_set_to_subtract)
-    bpy.utils.unregister_class(MASK_set_to_add)
-    bpy.utils.unregister_class(MASK_setup_masking_scene)
-    bpy.utils.unregister_class(MASK_set_drawtype)
-    bpy.utils.unregister_class(MASK_set_marker_drawtype)
-    bpy.utils.unregister_class(MASK_clear_keyframes)
-
+    for c in classes:
+        bpy.utils.unregister_class(c)
 
 if __name__ == "__main__":
     register()
-
-

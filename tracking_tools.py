@@ -184,22 +184,22 @@ def find_zero_weighted_tracks(scene, tracks):
 def insert_keyframe(scene, fade_time, marker_dict):
     for track, list in marker_dict.items():
         # define keyframe_values
-        frame1 = list[0]
-        frame2 = list[0] + fade_time
-        frame3 = list[-2] - fade_time
-        frame4 = list[-2]
+        f1 = list[0]
+        f2 = list[0] + fade_time
+        f3 = list[-2] - fade_time
+        f4 = list[-2]
         # only key track start if it is not the start of the clip
-        if frame1 - scene.frame_start > fade_time:
+        if f1 - scene.frame_start > fade_time:
             track.weight = 0
-            track.keyframe_insert(data_path="weight", frame=frame1)
+            track.keyframe_insert(data_path="weight", frame=f1)
             track.weight = 1
-            track.keyframe_insert(data_path="weight", frame=frame2)
+            track.keyframe_insert(data_path="weight", frame=f2)
         # now set keyframe for weight 0 at the end of the track
         # but only if it doesnt go until the end of the shot
-        if scene.frame_end - frame4+1 > fade_time:
-            track.keyframe_insert(data_path="weight", frame=frame3)
+        if scene.frame_end - f4+1 > fade_time:
+            track.keyframe_insert(data_path="weight", frame=f3)
             track.weight = 0
-            track.keyframe_insert(data_path="weight", frame=frame4)
+            track.keyframe_insert(data_path="weight", frame=f4)
 
 
 
@@ -313,7 +313,6 @@ class CLIP_OT_select_foreground(Operator):
                     other_average = get_average_slope(context, t, f, eval_time)
                     global_average += other_average
                 global_average = global_average / len(currently_valid_tracks)
-                print(track.name, f, track_average, global_average)
                 for i in [0,1]:
                     difference = get_difference(track_average, global_average, i) * eval_time
                     print(track.name, i, difference)
@@ -372,7 +371,6 @@ class CLIP_OT_weight_fade(Operator):
         # first clear any previous weight animation
         clear_weight_animation(scene, tracks, 1)
         # then find out which tracks to operate on
-        marker_dict = get_marker_list(scene, tracks, self.fade_time)
         valid_tracks = get_valid_tracks(scene, tracks)
         short = []
         for track, list in valid_tracks.items():
