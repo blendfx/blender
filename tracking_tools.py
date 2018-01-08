@@ -265,7 +265,7 @@ class CLIP_OT_filter_track_ends(Operator):
 
     def execute(self, context):
         # first do a minimal cleanup
-        # bpy.ops.clip.clean_tracks(frames=3, error=0, action='DELETE_TRACK')
+        bpy.ops.clip.clean_tracks(frames=3, error=0, action='DELETE_SEGMENTS')
         num_tracks = self.filter_track_ends(context, self.threshold, self.eval_time)
         self.report({'INFO'}, "Muted %d track ends" % num_tracks)
         return {'FINISHED'}
