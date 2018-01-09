@@ -3,6 +3,7 @@ from bpy.types import Menu, Panel, Operator
 import random
 from mathutils import Vector
 from numpy import mean
+from math import sqrt
 
 class VIEW3D_OT_cable_wizard(Operator):
     bl_idname = "object.cable_wizard"
@@ -41,6 +42,11 @@ class VIEW3D_OT_cable_wizard(Operator):
             default=0.03,
             description="The maximum thickness of the cable"
             )
+    minimum_length = bpy.props.FloatProperty(
+        name="Minimum Length",
+        default=1.0,
+        description="The minimum distance below which no cable will be generated"
+    )
     @classmethod
     def poll(cls, context):
         if context.object.cable_source == "GREASE":
@@ -74,7 +80,7 @@ class VIEW3D_OT_cable_wizard(Operator):
 
 
     def create_vector_list(self, context, thickness, rnd1_loc, rnd2_loc):
-        random_gravity = self.gravity + self.random_gravity * random.uniform(-1, 1)
+        random_gravity = self.gravity + self.random_gravity * random.uniform(0,1)
         w = 1
         # contruct the position of the point in the middle
         mid_x = mean([rnd1_loc[0], rnd2_loc[0]]) + thickness * random.uniform(4,15)
@@ -133,10 +139,9 @@ class VIEW3D_OT_cable_wizard(Operator):
 
     def execute(self, context):
         ob = context.active_object
-        thickness = self.thickness + self.random_thickness * random.uniform(-1,1)
-
         i=0
         while i < self.iterations:
+            thickness = self.thickness + self.random_thickness * random.uniform(-1,1)
             if context.object.cable_source == "GREASE":
                 rnd1 = self.get_grease_points(context)[0]
                 rnd2 = self.get_grease_points(context)[1]
@@ -144,18 +149,21 @@ class VIEW3D_OT_cable_wizard(Operator):
                 rnd1 = self.get_vertex_points(context)[0]
                 rnd2 = self.get_vertex_points(context)[1]
 
-            vector_list = self.create_vector_list(context, thickness, rnd1, rnd2)
-            # now that we know the positions, create the cables
-            self.make_poly_line(vector_list, thickness)
-            # try to avoid creating the same curve twice during one iteration
-            if self.prevent_double is True:
-                try:
-                    point_list.remove(rnd1)
-                    point_list.remove(rnd2)
-                except:
-                    pass
+            distance = sqrt((rnd1[0]-rnd2[0])**2 + (rnd1[1]-rnd2[1])**2 +(rnd1[2]-rnd2[2])**2)
+            if not distance < self.minimum_length:
+                vector_list = self.create_vector_list(context, thickness, rnd1, rnd2)
+                # now that we know the positions, create the cables
+                self.make_poly_line(vector_list, thickness)
+                # try to avoid creating the same curve twice during one iteration
+                if self.prevent_double is True:
+                    try:
+                        point_list.remove(rnd1)
+                        point_list.remove(rnd2)
+                    except:
+                        pass
             i+=1
         return {'FINISHED'}
+
 
 class VIEW3D_OT_cable_edit(Operator):
     bl_idname = "object.cable_edit"
@@ -188,10 +196,10 @@ class VIEW3D_OT_cable_edit(Operator):
         return context.selected_objects
 
     def execute(self, context):
-        random_gravity = self.gravity + self.random_gravity * random.uniform(-1, 1)
         obs = context.selected_objects
-        thickness = self.thickness + self.random_thickness * random.uniform(-1,1)
         for c in obs:
+            thickness = self.thickness + self.random_thickness * random.uniform(-1,1)
+            random_gravity = self.gravity + self.random_gravity * random.uniform(-1, 1)
             spline = c.data.splines[0]
             if len(spline.points) == 3:
                spline.points[1].co.z -= random_gravity
