@@ -88,11 +88,11 @@ class VIEW3D_OT_cable_wizard(Operator):
         polyline.order_u = len(polyline.points)
         polyline.use_endpoint_u = True
 
-    def generate_point(coordinate):
+    def generate_point(self ,coordinate):
         w=1
-        point1 = coordinate[0] + (self.spread*random_uniform(-1,1)) 
-        point2 = coordinate[1] + (self.spread*random_uniform(-1,1)) 
-        point3 = coordinate[2] + (self.spread*random_uniform(-1,1)) 
+        point1 = coordinate[0] + (self.spread*random.uniform(-1,1)) 
+        point2 = coordinate[1] + (self.spread*random.uniform(-1,1)) 
+        point3 = coordinate[2] + (self.spread*random.uniform(-1,1)) 
         return (point1, point2, point3, w)
 
     def create_vector_list(self, context, thickness, rnd1_loc, rnd2_loc):
@@ -190,23 +190,23 @@ class VIEW3D_OT_cable_edit(Operator):
 
     gravity = bpy.props.FloatProperty(
             name="Gravity",
-            default=1.0,
+            default=0.0,
             description="Defines the amount of hanging of the cable"
             )
     random_gravity = bpy.props.FloatProperty(
             name="Random Gravity",
-            default=1.0,
+            default=0.0,
             description="Defines the amount of hanging of the cable"
             )
     thickness = bpy.props.FloatProperty(
             name="Thickness",
-            default=0.03,
+            default=0.0,
             min=0.0,
             description="The maximum thickness of the cable"
             )
     random_thickness = bpy.props.FloatProperty(
             name="Random Thickness",
-            default=0.03,
+            default=0.0,
             min=0.0,
             description="The maximum thickness of the cable"
             )
@@ -226,7 +226,7 @@ class VIEW3D_OT_cable_edit(Operator):
             spline = c.data.splines[0]
             if len(spline.points) == 3:
                spline.points[1].co.z -= random_gravity
-               c.data.bevel_depth = thickness
+               c.data.bevel_depth = c.data.bevel_depth + thickness
         return {'FINISHED'}
 
 
