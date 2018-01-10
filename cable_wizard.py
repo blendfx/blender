@@ -105,8 +105,8 @@ class VIEW3D_OT_cable_wizard(Operator):
         mid_z = mean([rnd1_loc[2], rnd2_loc[2]]) - random_gravity
         # construct 4d Vectors with empty 4th value (w)
         mid_vert = (mid_x, mid_y, mid_z, w)
-        rnd_vert_1 = generate_point(rnd1_loc)
-        rnd_vert_2 = generate_point(rnd2_loc)
+        rnd_vert_1 = self.generate_point(rnd1_loc)
+        rnd_vert_2 = self.generate_point(rnd2_loc)
         # create a list with these 3 points
         vector_list = [rnd_vert_1, mid_vert, rnd_vert_2]
         return vector_list
