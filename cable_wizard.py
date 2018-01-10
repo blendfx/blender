@@ -18,7 +18,7 @@ class VIEW3D_OT_cable_wizard(Operator):
 
     iterations = bpy.props.IntProperty(
             name="Iterations",
-            default=5,
+            default=20,
             min=1,
             description="Amount of cables to generate"
             )
@@ -42,11 +42,21 @@ class VIEW3D_OT_cable_wizard(Operator):
             default=0.03,
             description="The maximum thickness of the cable"
             )
-    minimum_length = bpy.props.FloatProperty(
-        name="Minimum Length",
-        default=1.0,
-        description="The minimum distance below which no cable will be generated"
-    )
+    min_length = bpy.props.FloatProperty(
+            name="Min Cable Length",
+            default=2.0,
+            description="The minimum length of a cable"
+            )
+    max_length = bpy.props.FloatProperty(
+            name="Max Cable Length",
+            default=50.0,
+            description="The maximum length of a cable"
+            )
+    spread = bpy.props.FloatProperty(
+            name="Spread",
+            default=0.01,
+            description="Move cable ends from the same source away from eachother"
+            )
     @classmethod
     def poll(cls, context):
         if context.object.cable_source == "GREASE":
@@ -78,9 +88,16 @@ class VIEW3D_OT_cable_wizard(Operator):
         polyline.order_u = len(polyline.points)
         polyline.use_endpoint_u = True
 
+    def generate_point(coordinate):
+        w=1
+        point1 = coordinate[0] + (self.spread*random_uniform(-1,1)) 
+        point2 = coordinate[1] + (self.spread*random_uniform(-1,1)) 
+        point3 = coordinate[2] + (self.spread*random_uniform(-1,1)) 
+        return (point1, point2, point3, w)
 
     def create_vector_list(self, context, thickness, rnd1_loc, rnd2_loc):
         random_gravity = self.gravity + self.random_gravity * random.uniform(0,1)
+        spread = self.spread*random.uniform(-1,1)
         w = 1
         # contruct the position of the point in the middle
         mid_x = mean([rnd1_loc[0], rnd2_loc[0]]) + thickness * random.uniform(4,15)
@@ -88,8 +105,8 @@ class VIEW3D_OT_cable_wizard(Operator):
         mid_z = mean([rnd1_loc[2], rnd2_loc[2]]) - random_gravity
         # construct 4d Vectors with empty 4th value (w)
         mid_vert = (mid_x, mid_y, mid_z, w)
-        rnd_vert_1 = (rnd1_loc[0], rnd1_loc[1], rnd1_loc[2], w)
-        rnd_vert_2 = (rnd2_loc[0], rnd2_loc[1], rnd2_loc[2], w)
+        rnd_vert_1 = generate_point(rnd1_loc)
+        rnd_vert_2 = generate_point(rnd2_loc)
         # create a list with these 3 points
         vector_list = [rnd_vert_1, mid_vert, rnd_vert_2]
         return vector_list
@@ -150,7 +167,7 @@ class VIEW3D_OT_cable_wizard(Operator):
                 rnd2 = self.get_vertex_points(context)[1]
 
             distance = sqrt((rnd1[0]-rnd2[0])**2 + (rnd1[1]-rnd2[1])**2 +(rnd1[2]-rnd2[2])**2)
-            if not distance < self.minimum_length:
+            if not distance < self.min_length and not distance > self.max_length:
                 vector_list = self.create_vector_list(context, thickness, rnd1, rnd2)
                 # now that we know the positions, create the cables
                 self.make_poly_line(vector_list, thickness)
@@ -184,25 +201,32 @@ class VIEW3D_OT_cable_edit(Operator):
     thickness = bpy.props.FloatProperty(
             name="Thickness",
             default=0.03,
+            min=0.0,
             description="The maximum thickness of the cable"
             )
     random_thickness = bpy.props.FloatProperty(
             name="Random Thickness",
             default=0.03,
+            min=0.0,
             description="The maximum thickness of the cable"
             )
     @classmethod
     def poll(cls, context):
-        return context.selected_objects
+        for ob in context.selected_objects:
+            if not ob.type == 'CURVE' or len(context.selected_objects)==0:
+                return False
+            else:
+                return True
 
     def execute(self, context):
         obs = context.selected_objects
         for c in obs:
             thickness = self.thickness + self.random_thickness * random.uniform(-1,1)
-            random_gravity = self.gravity + self.random_gravity * random.uniform(-1, 1)
+            random_gravity = self.gravity + self.random_gravity * random.uniform(0,1)
             spline = c.data.splines[0]
             if len(spline.points) == 3:
                spline.points[1].co.z -= random_gravity
+               c.data.bevel_depth = thickness
         return {'FINISHED'}
 
 
@@ -216,22 +240,29 @@ class VIEW3D_PT_cable_wizard(Panel):
 
     @classmethod
     def poll(cls, context):
-        return (context.active_object is not None)
+        return context.active_object
 
 
     def draw(self, context):
         scn = context.scene
-        layout = self.layout
-        col = layout.column()
-        col.operator("object.cable_wizard", icon="IPO_EASE_IN")
-        col.prop_search(scn, "vertex_group", context.active_object, "vertex_groups", text="Cable Hooks")
-        col.operator("object.cable_edit")
-
         ob = context.object
 
+        layout = self.layout
         layout.label("Cable Source:")
         row = layout.row()
         row.prop(ob, "cable_source", expand=True)
+        col = layout.column()
+        # this is very hacky.
+        # if an object without v_group is active, the group field shows red
+        # looks like an error, even if it's not. 
+        if ob.cable_source == 'VERTEX' and ob.type == 'MESH':
+            col.prop_search(scn, "vertex_group", context.active_object, "vertex_groups", text="")
+        col.label("Create Cables")
+        col.operator("object.cable_wizard", icon="IPO_EASE_IN")
+        col.label("Edit Cables")
+        col.operator("object.cable_edit")
+
+
 
 
 classes = (
@@ -243,7 +274,7 @@ classes = (
 def register():
     for c in classes:
         bpy.utils.register_class(c)
-    bpy.types.Scene.vertex_group = bpy.props.StringProperty(name="vertex_group_hooks")
+    bpy.types.Scene.vertex_group = bpy.props.StringProperty(name="vertex_group")
 
     bpy.types.Object.cable_source = bpy.props.EnumProperty(
     items=(
