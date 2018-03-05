@@ -19,7 +19,7 @@
 bl_info = {
     "name": "VRAIS Tools",
     "author": "Sebastian Koenig",
-    "version": (1,0),
+    "version": (1,1),
     "blender": (2, 77, 0),
     "location": "Properties > Render",
     "description": "Upload VR Panormas and Cubemaps to vrais.io",
@@ -63,7 +63,10 @@ class VraisTools(bpy.types.AddonPreferences):
 def configure_vrais_cubemap_path(scn):
     vs = scn.vrais_settings
     suffix = ".jpg"
-    vrais_cubemap_path = os.path.join(vs.cube_filepath, vs.filename + suffix)
+    if vs.filename=="":
+        vrais_cubemap_path = os.path.join(vs.cube_filepath, os.path.basename(os.path.normpath(vs.source_path)) + suffix)
+    else:
+        vrais_cubemap_path = os.path.join(vs.cube_filepath, vs.filename + suffix)
     return vrais_cubemap_path
 
 # create a new temporary scene, which is used to assemble the cubemap stripe from the 12 cubemap tiles. 
@@ -106,25 +109,48 @@ def img_node_creator(new_scn, scn):
     if file_format == "jpeg": # make sure the suffix matches the output
         file_format = "jpg"
     testlist = [] # this is used for testing if all images are found
-
-    img_dict = {
-        "EAST_%s_R" % (frame):1,     
-        "WEST_%s_R" % (frame):2,     
-        "ZENITH_%s_R" % (frame):3,     
-        "NADIR_%s_R" % (frame):4,     
-        "NORTH_%s_R" % (frame):5,     
-        "SOUTH_%s_R" % (frame):6,
-        "EAST_%s_L" % (frame):7,     
-        "WEST_%s_L" % (frame):8,     
-        "ZENITH_%s_L" % (frame):9,     
-        "NADIR_%s_L" % (frame):10,     
-        "NORTH_%s_L" % (frame):11,     
-        "SOUTH_%s_L" % (frame):12      
+    # check how the cubemap was generated
+    # it's enough to know if one of the files in the source folder starts with "NORTH"
+    type = 0
+    for root, dirs, files in os.walk(scn.vrais_settings.source_path):
+        for f in files:
+            if f.startswith("NORTH"):
+                type = 1
+    if type == 1:
+        img_dict = {
+            "EAST_%s_R" % (frame):1,     
+            "WEST_%s_R" % (frame):2,     
+            "ZENITH_%s_R" % (frame):3,     
+            "NADIR_%s_R" % (frame):4,     
+            "NORTH_%s_R" % (frame):5,     
+            "SOUTH_%s_R" % (frame):6,
+            "EAST_%s_L" % (frame):7,     
+            "WEST_%s_L" % (frame):8,     
+            "ZENITH_%s_L" % (frame):9,     
+            "NADIR_%s_L" % (frame):10,     
+            "NORTH_%s_L" % (frame):11,     
+            "SOUTH_%s_L" % (frame):12      
+        }
+    else:
+        img_dict = {
+            "000004_R":1,
+            "000003_R":2,
+            "000005_R":3,
+            "000006_R":4,
+            "000001_R":5,
+            "000002_R":6,
+            "000004_L":7,
+            "000003_L":8,
+            "000005_L":9,
+            "000006_L":10,
+            "000001_L":11,
+            "000002_L":12
         }
     # create new nodes with the images and names from 1 to 12.
     # with the node.name we pass the index on to the connector function
     for img in img_dict:
-        img_path = os.path.join(scn.render.filepath, img + "." + file_format)
+        img_path = os.path.join(scn.vrais_settings.source_path, img + "." + file_format)
+        print(img_path)
         img_index = img_dict[img]
         node = tree.nodes.new(type="CompositorNodeImage")
         node.location = node.location[0], node.location[1] -  img_index*300
@@ -251,14 +277,6 @@ class VRAIS_OT_setup_cubemap(bpy.types.Operator):
                 )
 
         scn.vrais_enum = 'VRAIS_CUBE'
-        scn.vrais_settings.cube_filepath = render.filepath
-
-        if not check_cubemap_addon():
-            self.report(
-                {'ERROR'},
-                "In order to render your VR scene as cubemap, you need to enable the 'Cube Map' add-on!")
-        else:
-            scn.cube_map.use_cube_map = True
 
         return {'FINISHED'}
 
@@ -406,6 +424,7 @@ class RENDER_PT_vrais_tools(bpy.types.Panel):
         col.prop(vs, 'vrais_title')
         col.prop(vs, 'description')
         if cubemap:
+            col.prop(vs, 'source_path')
             col.prop(vs, 'cube_filepath')
             col.prop(vs, 'filename')
             col.operator("scene.vrais_create_cubemap", icon="IMAGE_DATA")
@@ -429,17 +448,22 @@ class VraisSettings(bpy.types.PropertyGroup):
         name="Scene Description",
         description="You need to fill in a description for the image to be displayed in VRAIS")
     filename = StringProperty(
-        name="Filename", 
+        name="Name", 
         description="Set the name of the Cubemap Stripe, which will be generated and uploaded to VRAIS", 
-        default="cubemap")
+        default="")
     equi_filepath = StringProperty(
         name="Filepath",
         description="Choose the VR Panorama File",
         subtype='FILE_PATH')
-    cube_filepath = StringProperty(
-        name="Filepath", 
-        description="Here's where the Cubemap will be generated (and loaded)", 
+    source_path = StringProperty(
+        name="Cubemap Source",
+        description="Choose the folder with the source images",
         subtype='DIR_PATH')
+    cube_filepath = StringProperty(
+        name="Cubemap Target", 
+        description="Here's where the Cubemap will be generated (and loaded)", 
+        subtype='DIR_PATH',
+        default="//../")
 
 
 
