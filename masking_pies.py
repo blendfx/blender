@@ -49,6 +49,69 @@ def selected_mask_points(context):
         print("no points selected?")
 
 
+def add_mask_to_node(context, clip, target_input):
+    # add a new mask node and configure it
+    tree = context.scene.node_tree
+    links = tree.links
+    active_node = tree.nodes.active
+    new_mask_node = tree.nodes.new(type="CompositorNodeMask")
+    next_node_location = (active_node.location[0]-200, active_node.location[1]+100)
+    if clip:
+        if clip.tracking.camera.pixel_aspect != 1:
+            scale_node = tree.nodes.new(type="CompositorNodeScale")
+            scale_node.space = 'RELATIVE'
+            scale_node.inputs[2].default_value = clip.tracking.camera.pixel_aspect
+            scale_node.location = next_node_location
+            new_mask_node.location = scale_node.location[0] - 200, active_node.location[1] + 100
+            links.new(scale_node.outputs[0], target_input)
+            links.new(new_mask_node.outputs[0], scale_node.inputs[0])
+        else:
+            new_mask_node.location = active_node.location[0] - 200, active_node.location[1] + 100
+            links.new(new_mask_node.outputs[0], target_input)
+    mask = bpy.data.masks.new(name="")
+    new_mask_node.mask = mask
+
+
+class NODE_OT_add_mask_to_node(Operator):
+    bl_idname = "node.add_mask_to_node"
+    bl_label = "Add Mask to Node"
+
+    @classmethod
+    def poll(cls, context):
+        space = context.space_data
+        return space.type == 'NODE_EDITOR' and space.tree_type == 'CompositorNodeTree'
+
+    def execute(self, context):
+        scn = context.scene
+        tree = scn.node_tree
+        links = tree.links
+        clip = scn.active_clip
+
+        active_node = tree.nodes.active
+        if active_node:
+            if active_node.inputs.get('Fac'):
+                fac_input = active_node.inputs['Fac']
+                if not len(fac_input.links) > 0:
+                    add_mask_to_node(context, clip, fac_input)
+                else:
+                    print("the node ", active_node.name, "already has a node linked to Fac input")
+            elif active_node.type == 'MATH':
+                # this is really ugly, but works
+                input_list = []
+                for input in active_node.inputs:
+                    if not len(input.links) > 0:
+                        input_list.append(input)
+                if len(input_list) == 2:
+                    fac_input = input_list[0]
+                    add_mask_to_node(context, clip, fac_input)
+                elif len(input_list) == 1:
+                    fac_input = input_list[0]
+                    add_mask_to_node(context, clip, fac_input)
+        else:
+            print("No valid node active")
+        return {'FINISHED'}
+
+
 class MASK_OT_activate_mask(Operator):
     """Make the active mask node the active mask in Clip/Image Editor"""
     bl_idname = "mask.activate_mask"
@@ -320,6 +383,7 @@ classes = (
     MASK_PIE_mask_editing,
     MASK_PIE_mask_layers,
     MASK_PIE_mask_display,
+    NODE_OT_add_mask_to_node,
     MASK_OT_new_mask_layer,
     MASK_OT_set_to_subtract,
     MASK_OT_set_to_add,
@@ -347,6 +411,7 @@ def register():
 
     km = wm.keyconfigs.addon.keymaps.new(name='Node Editor', space_type='NODE_EDITOR')
     kmi = km.keymap_items.new('mask.activate_mask', 'ACTIONMOUSE', 'DOUBLE_CLICK')
+    kmi = km.keymap_items.new('node.add_mask_to_node', 'M', 'PRESS', ctrl=True)
 
 
 
