@@ -21,7 +21,7 @@ bl_info = {
     "name": "Reconstruct 3D Mesh",
     "author": "Sebastian Koenig",
     "version": (1, 0),
-    "blender": (2, 7, 9),
+    "blender": (2, 8, 0),
     "location": "Clip Editor > Tools > Reconstruct 3D Mesh",
     "description": "Generate a 3D mesh from trackers, works best for simple planes",
     "warning": "",
@@ -32,8 +32,9 @@ bl_info = {
 
 
 import bpy
+from bpy.types import Operator, Panel
 
-class CLIP_OT_mesh_reconstruction(bpy.types.Operator):
+class CLIP_OT_mesh_reconstruction(Operator):
     ''' Create a face from selected tracks. Needs a camera solve. Works best for flat surfaces'''
     bl_idname = "clip.mesh_reconstruction"
     bl_label = "Mesh Reconstruction"
@@ -50,8 +51,8 @@ class CLIP_OT_mesh_reconstruction(bpy.types.Operator):
 
         # create a plane from the single vertices
         ob = bpy.data.objects["Tracks"]
-        bpy.context.scene.objects.active = ob
-        ob.select = True
+        bpy.context.view_layer.objects.active = ob
+        ob.select_set(True)
         bpy.ops.object.mode_set(mode="EDIT")
         bpy.ops.mesh.select_all(action="SELECT")
         bpy.ops.mesh.edge_face_add()

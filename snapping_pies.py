@@ -1,61 +1,21 @@
 bl_info = {
     "name": "Snapping Pies",
     "author": "Sebastian Koenig, Ivan Santic",
-    "version": (0, 2),
-    "blender": (2, 7, 2),
+    "version": (0, 3),
+    "blender": (2, 8, 0),
     "description": "Custom Pie Menus",
     "category": "3D View",}
 
 
 
 import bpy
-from bpy.types import Menu
-
-
-###### FUNTIONS ##########
-
-def origin_to_selection(context):
-    context = bpy.context
-
-    if context.object.mode == "EDIT":
-        saved_location = context.scene.cursor_location.copy()
-        bpy.ops.view3d.snap_cursor_to_selected()
-        bpy.ops.object.mode_set(mode="OBJECT")
-        bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
-        context.scene.cursor_location = saved_location
-
-
-def origin_to_geometry(context):
-    context = bpy.context
-
-    if context.object.mode == "EDIT":
-        bpy.ops.object.mode_set(mode="OBJECT")
-        bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY')
-        bpy.ops.object.mode_set(mode="EDIT")
-
-
+from bpy.types import Menu, Operator, Panel
 
 
 ########### CUSTOM OPERATORS ###############
 
 
-class VIEW3D_PIE_Snapping_Extras(Menu):
-    bl_label = "Snapping Extras"
-    
-
-    def draw(self, context):
-        layout = self.layout
-        space = context.space_data
-
-        pie = layout.menu_pie()
-        pie.operator("view3d.snap_cursor_to_center", icon="MANIPUL")
-        pie.operator("view3d.snap_cursor_to_active", icon="CURSOR")
-        pie.operator("view3d.snap_selected_to_grid", icon="GRID")
-        pie.operator("view3d.snap_cursor_to_grid", icon="GRID")
-        
- 
-
-class VIEW3D_OT_toggle_pivot(bpy.types.Operator):
+class VIEW3D_OT_toggle_pivot(Operator):
     """Toggle between 3D-Cursor and Median pivoting"""
     bl_idname = "scene.toggle_pivot"
     bl_label = "Toggle Pivot"
@@ -77,80 +37,111 @@ class VIEW3D_OT_toggle_pivot(bpy.types.Operator):
  
 
 
-class VIEW3D_OT_origin_to_selected(bpy.types.Operator):
-    bl_idname="object.origin_to_selected"
-    bl_label="Origin to Selection"
+class VIEW3D_OT_object_to_marker(Operator):
+    "Set the object's origin to the mesh selection and place the object to the active 3d Marker"
+    bl_idname = "object.object_to_marker"
+    bl_label = "Snap Origin to 3D Marker"
 
     @classmethod
     def poll(cls, context):
         sc = context.space_data
-        return (sc.type == 'VIEW_3D')
+        clip = context.scene.active_clip
+        average_error = clip.tracking.objects.active.reconstruction.average_error
+        active_object = context.view_layer.objects.active
+        return (sc.type == 'VIEW_3D' and average_error > 0.0 and active_object != context.scene.camera)
 
     def execute(self, context):
-        origin_to_selection(context)
+        cursor_location = context.scene.cursor.location.copy()
+        active_object = context.view_layer.objects.active
+        active_camera = context.scene.camera
+        # make sure only the camera is selected
+        bpy.ops.object.select_all(action='DESELECT')
+        context.view_layer.objects.active = active_camera
+        active_camera.select_set(True)
+        bpy.ops.view3d.snap_cursor_to_selected()
+        marker_location = context.scene.cursor.location.copy()
+        active_camera.select_set(False)
+
+        context.view_layer.objects.active = active_object
+        active_object.select_set(True)
+        active_object.location = marker_location
+        context.scene.cursor.location = cursor_location
+
         return {'FINISHED'}
 
 
-class VIEW3D_OT_origin_to_geometry(bpy.types.Operator):
+class VIEW3D_OT_origin_to_marker(Operator):
+    "Set the object's origin to the mesh selection and place the object to the active 3d Marker"
+    bl_idname = "object.origin_to_marker"
+    bl_label = "Snap Origin to 3D Marker"
+
+    @classmethod
+    def poll(cls, context):
+        sc = context.space_data
+        clip = context.scene.active_clip
+        average_error = clip.tracking.objects.active.reconstruction.average_error
+        return (sc.type == 'VIEW_3D' and context.object.mode == 'EDIT' and average_error > 0.0)
+
+    def execute(self, context):
+        cursor_location = context.scene.cursor.location.copy()
+
+        # set origin to selected vertex
+        bpy.ops.view3d.snap_cursor_to_selected()
+        bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
+
+        # store the location of the 3d marker
+        active_object = context.view_layer.objects.active
+        active_camera = context.scene.camera
+        # make sure only the camera is selected
+        bpy.ops.object.select_all(action='DESELECT')
+        context.view_layer.objects.active = active_camera
+        active_camera.select_set(True)
+        bpy.ops.view3d.snap_cursor_to_selected()
+        marker_location = context.scene.cursor.location.copy()
+        active_camera.select_set(False)
+
+        context.view_layer.objects.active = active_object
+        active_object.select_set(True)
+        active_object.location = marker_location
+        context.scene.cursor.location = cursor_location
+        return {'FINISHED'}
+
+class VIEW3D_OT_origin_to_selected(Operator):
+    "Set the object's origin to the 3d cursor. Works only in edit mode"
+    bl_idname = "object.origin_to_selected"
+    bl_label = "Origin to Selection"
+
+    @classmethod
+    def poll(cls, context):
+        sc = context.space_data
+        return (sc.type == 'VIEW_3D' and context.object.mode == 'EDIT')
+
+    def execute(self, context):
+        cursor_location = context.scene.cursor.location.copy()
+        bpy.ops.view3d.snap_cursor_to_selected()
+        bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
+        context.scene.cursor.location = cursor_location
+        return {'FINISHED'}
+
+
+class VIEW3D_OT_origin_to_geometry(Operator):
     bl_idname="object.origin_to_geometry"
     bl_label="Origin to Geometry"
 
     @classmethod
     def poll(cls, context):
         sc = context.space_data
-        return (sc.type == 'VIEW_3D')
+        return (sc.type == 'VIEW_3D' and context.object.mode == 'EDIT')
 
     def execute(self, context):
-        origin_to_geometry(context)
+        bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY')
+        bpy.ops.object.mode_set(mode="EDIT")
         return {'FINISHED'}
 
 
-#Menu Snap Target
-class VIEW3D_PIE_SnapTarget(Menu):
-    bl_label = "Snap Target Menu"
-
-    def draw(self, context):
-        layout = self.layout
-        pie = layout.menu_pie()
-
-        pie.operator("object.snaptargetvariable", text="Active", icon="SNAP_SURFACE").variable='ACTIVE'
-        pie.operator("object.snaptargetvariable", text="Median", icon="SNAP_SURFACE").variable='MEDIAN'
-        pie.operator("object.snaptargetvariable", text="Center", icon="SNAP_SURFACE").variable='CENTER'
-        pie.operator("object.snaptargetvariable", text="Closest", icon="SNAP_SURFACE").variable='CLOSEST'
-        pie.operator("object.snapelementvariable", text="Face", icon="SNAP_FACE").variable='FACE'
-        pie.operator("object.snapelementvariable", text="Vertex", icon="SNAP_VERTEX").variable='VERTEX'
-        pie.operator("object.snapelementvariable", text="Edge", icon="SNAP_EDGE").variable='EDGE'
-        pie.operator("object.snapelementvariable", text="Increment", icon="SNAP_INCREMENT").variable='INCREMENT'
-
-
-
-class VIEW3D_OT_SnapTargetVariable(bpy.types.Operator):
-    bl_idname = "object.snaptargetvariable"
-    bl_label = "Snap Target Variable"
-    variable = bpy.props.StringProperty()
-
-    @classmethod
-    def poll(cls, context):
-        return True
-
-    def execute(self, context):
-        bpy.context.scene.tool_settings.snap_target=self.variable
-        return {'FINISHED'}
-
-
-
-class VIEW3D_OT_SnapElementVariable(bpy.types.Operator):
-    bl_idname = "object.snapelementvariable"
-    bl_label = "Snap Element Variable"
-    variable = bpy.props.StringProperty()
-
-    @classmethod
-    def poll(cls, context):
-        return True
-
-    def execute(self, context):
-        bpy.context.scene.tool_settings.snap_element=self.variable
-        return {'FINISHED'}
 
 
 
@@ -166,7 +157,7 @@ class VIEW3D_PIE_SnapElementMenu(Menu):
 
 
 #Menu Snap Element
-class VIEW3D_OT_SetPivotIndividual(bpy.types.Operator):
+class VIEW3D_OT_SetPivotIndividual(Operator):
     bl_label = "Individual Origins"
     bl_idname = "object.setpivotindidual"
 
@@ -187,100 +178,92 @@ class VIEW3D_OT_SetPivotIndividual(bpy.types.Operator):
 
 ################### PIES #####################
 
-class VIEW3D_PIE_origin(Menu):
+class VIEW3D_PIE_MT_snapping_pie(Menu):
     # label is displayed at the center of the pie menu.
     bl_label = "Snapping and Origin"
-    bl_idname = "object.snapping_pie"
+    bl_idname = "VIEW3D_PIE_MT_snapping_pie"
 
     def draw(self, context):
         context = bpy.context
         layout = self.layout
         tool_settings = context.scene.tool_settings
 
+        clip = context.scene.active_clip
+        tracks = getattr(getattr(clip, "tracking", None), "tracks", None)
+        track_active = tracks.active if tracks else None
         pie = layout.menu_pie()
-
-        pie.operator("view3d.snap_selected_to_cursor", icon="CLIPUV_HLT")
-        pie.operator("view3d.snap_cursor_to_selected", icon="CURSOR")
+        editmode = context.object.mode == 'EDIT'
 
         # set origin to selection in Edit Mode, set origin to cursor in Object mode
         if context.active_object:
-            if context.object.mode == "EDIT":
-                pie.operator("object.origin_to_selected", icon="OUTLINER_OB_EMPTY")
+            # Origin to Geometry
+            if editmode:
+                pie.operator("object.origin_set", text="Origin to Geometry").type="ORIGIN_GEOMETRY"
             else:
-                pie.operator("object.origin_set",icon="EMPTY_DATA", text="Origin to Cursor").type="ORIGIN_CURSOR"
+                pie.operator("object.origin_to_geometry")
 
-            if context.object.mode == "OBJECT":
-                pie.operator("object.origin_set",icon="MESH_CUBE", text="Origin to Geometry").type="ORIGIN_GEOMETRY"
+            # Origin to Cursor / Selected
+            if editmode:
+                pie.operator("object.origin_to_selected")
             else:
-                pie.operator("object.origin_to_geometry", icon="MESH_CUBE")
-        else:
-            pass
+                pie.operator("object.origin_set", text="Origin to Cursor").type="ORIGIN_CURSOR"
+
+        pie.operator("view3d.snap_cursor_to_selected", icon="CURSOR")
+        pie.operator(
+            "view3d.snap_selected_to_cursor",
+            text="Selection to Cursor",
+            icon='RESTRICT_SELECT_OFF',
+        ).use_offset = False
 
         pie.operator("view3d.snap_cursor_to_center", icon="CURSOR")
-        pie.operator("wm.call_menu_pie", text="Element / Target", icon='PLUS').name = "VIEW3D_PIE_SnapTarget"
-
-        if context.active_object:
-            if context.object.mode == "EDIT":
-                if tool_settings.use_mesh_automerge:
-                    pie.prop(tool_settings, "use_mesh_automerge", text="Automerge (ON)", icon='AUTOMERGE_ON')
-                else:
-                    pie.prop(tool_settings, "use_mesh_automerge", text="Automerge (OFF)", icon='AUTOMERGE_OFF')
+        if track_active:
+            if editmode:
+                pie.operator("object.origin_to_marker")
             else:
-                pie.operator("object.setpivotindidual", icon="ROTATECOLLECTION")
-        else:
-            passn
+                pie.operator("object.object_to_marker")
 
-        pie.operator("scene.toggle_pivot", icon="ROTATECENTER")
+        pie.operator("scene.toggle_pivot")
 
 
 
 ########## REGISTER ############
+classes = {
+    VIEW3D_OT_toggle_pivot,
+    VIEW3D_OT_origin_to_selected,
+    VIEW3D_OT_origin_to_geometry,
+    VIEW3D_OT_SetPivotIndividual,
+    VIEW3D_OT_origin_to_marker,
+    VIEW3D_OT_object_to_marker,
+    VIEW3D_PIE_MT_snapping_pie,
+}
+
 
 def register():
-    bpy.utils.register_class(VIEW3D_OT_toggle_pivot)
-    bpy.utils.register_class(VIEW3D_OT_origin_to_selected)
-    bpy.utils.register_class(VIEW3D_OT_origin_to_geometry)
-    bpy.utils.register_class(VIEW3D_OT_SnapTargetVariable)
-    bpy.utils.register_class(VIEW3D_OT_SnapElementVariable)
-    bpy.utils.register_class(VIEW3D_OT_SetPivotIndividual)
-    bpy.utils.register_class(VIEW3D_PIE_origin)
-    bpy.utils.register_class(VIEW3D_PIE_SnapElementMenu)
-    bpy.utils.register_class(VIEW3D_PIE_SnapTarget)
-    bpy.utils.register_class(VIEW3D_PIE_Snapping_Extras)
-
+    for c in classes:
+        bpy.utils.register_class(c)
 
     wm = bpy.context.window_manager
 
     km = wm.keyconfigs.addon.keymaps.new(name = 'Object Mode')
-    kmi = km.keymap_items.new('wm.call_menu_pie', 'S', 'PRESS', shift=True).properties.name = "object.snapping_pie"
+    kmi = km.keymap_items.new('wm.call_menu_pie', 'S', 'PRESS', shift=True).properties.name = "VIEW3D_PIE_MT_snapping_pie"
 
     km = wm.keyconfigs.addon.keymaps.new(name = 'Mesh')
-    kmi = km.keymap_items.new('wm.call_menu_pie', 'S', 'PRESS',shift=True).properties.name = "object.snapping_pie"
+    kmi = km.keymap_items.new('wm.call_menu_pie', 'S', 'PRESS',shift=True).properties.name = "VIEW3D_PIE_MT_snapping_pie"
 
     km = wm.keyconfigs.addon.keymaps.new(name = 'Curve')
-    kmi = km.keymap_items.new('wm.call_menu_pie', 'S', 'PRESS',shift=True).properties.name = "object.snapping_pie"
+    kmi = km.keymap_items.new('wm.call_menu_pie', 'S', 'PRESS',shift=True).properties.name = "VIEW3D_PIE_MT_snapping_pie"
 
     km = wm.keyconfigs.addon.keymaps.new(name = 'Armature')
-    kmi = km.keymap_items.new('wm.call_menu_pie', 'S', 'PRESS',shift=True).properties.name = "object.snapping_pie" 
+    kmi = km.keymap_items.new('wm.call_menu_pie', 'S', 'PRESS',shift=True).properties.name = "VIEW3D_PIE_MT_snapping_pie" 
 
     km = wm.keyconfigs.addon.keymaps.new(name = 'Pose')
-    kmi = km.keymap_items.new('wm.call_menu_pie', 'S', 'PRESS',shift=True).properties.name = "object.snapping_pie"
+    kmi = km.keymap_items.new('wm.call_menu_pie', 'S', 'PRESS',shift=True).properties.name = "VIEW3D_PIE_MT_snapping_pie"
 
 
 
 def unregister():
-
-    bpy.utils.unregister_class(VIEW3D_OT_toggle_pivot)
-    bpy.utils.unregister_class(VIEW3D_OT_origin_to_selected)
-    bpy.utils.unregister_class(VIEW3D_OT_origin_to_geometry)
-    bpy.utils.unregister_class(VIEW3D_OT_SnapTargetVariable)
-    bpy.utils.unregister_class(VIEW3D_OT_SnapElementVariable)
-    bpy.utils.unregister_class(VIEW3D_OT_SetPivotIndividual)
-    bpy.utils.unregister_class(VIEW3D_PIE_origin)
-    bpy.utils.unregister_class(VIEW3D_PIE_SnapElementMenu)
-    bpy.utils.unregister_class(VIEW3D_PIE_SnapTarget)
-    bpy.utils.unregister_class(VIEW3D_PIE_Snapping_Extras)
-
+    for c in classes:
+        bpy.utils.unregister_class(c)
 
 if __name__ == "__main__":
     register()
