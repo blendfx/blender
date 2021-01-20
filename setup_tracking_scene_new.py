@@ -641,7 +641,7 @@ class CLIP_PT_new_tools_scenesetup(Panel):
         col.operator("clip.new_setup_tracking_scene")
         col = layout.column()
         col.active = not clip.tracking.objects.active.is_camera
-        col.operator("clip.create_tracking_object", text="OBJEC")
+        col.operator("clip.create_tracking_object", text="Setup Object")
 
 
 classes = (
