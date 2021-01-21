@@ -341,7 +341,8 @@ class CLIP_OT_new_setup_tracking_scene(Operator):
     @staticmethod
     def _findNode(tree, type):
         for node in tree.nodes:
-            if node.type == type:
+            print(node)
+            if node.bl_idname == type:
                 return node
 
         return None
@@ -352,6 +353,7 @@ class CLIP_OT_new_setup_tracking_scene(Operator):
 
         if not node:
             node = tree.nodes.new(type=type)
+            print("did not find", node)
 
         return node
 
@@ -376,6 +378,19 @@ class CLIP_OT_new_setup_tracking_scene(Operator):
             for b in tree.nodes:
                 if a != b and a.location == b.location:
                     b.location += Vector((40.0, 20.0))
+
+    def _setup_shadow_catcher(self, context, material):
+        tree = material.node_tree
+        print(tree)
+        print(material)
+
+        diffuse = self._findOrCreateNode(tree, 'ShaderNodeBsdfDiffuse')
+        shader_to_rgb = self._findOrCreateNode(tree, 'ShaderNodeShaderToRGB')
+        colorramp = self._findOrCreateNode(tree, 'ShaderNodeValToRGB')
+        principled = self._findOrCreateNode(tree, 'ShaderNodeBsdfPrincipled')
+        output = self._findOrCreateNode(tree, 'ShaderNodeOutputMaterial')
+
+
 
     def _setupNodes(self, context):
         if not self._needSetupNodes(context):
@@ -554,7 +569,13 @@ class CLIP_OT_new_setup_tracking_scene(Operator):
             """Make all the newly created and the old objects of a collection """ \
                 """to be properly setup for shadow catch"""
             for ob in collection.objects:
-                ob.cycles.is_shadow_catcher = True
+                if scene.render.engine == 'CYCLES':
+                    ob.cycles.is_shadow_catcher = True
+                elif scene.render.engine == 'BLENDER_EEVEE':
+                    shadow_catcher_eevee = bpy.data.materials.new(name="shadow_catcher_eevee")
+                    shadow_catcher_eevee.use_nodes = True
+                    self._setup_shadow_catcher(context, shadow_catcher_eevee)
+                    ob.data.materials.append(shadow_catcher_eevee)
                 for child in collection.children:
                     setup_shadow_catcher_collection(child)
 
@@ -590,8 +611,7 @@ class CLIP_OT_new_setup_tracking_scene(Operator):
                 ground = self._createGround(bg_coll)
 
             # And set everything on background layer to shadow catcher.
-            if hasattr(scene, "cycles"):
-                setup_shadow_catcher_objects(bg_coll)
+            setup_shadow_catcher_objects(bg_coll)
 
     def execute(self, context):
         self._setupScene(context)
