@@ -199,13 +199,17 @@ class CLIP_OT_create_tracking_object(Operator):
         scene = context.scene
         sc = context.space_data
         clip = sc.clip
+        collections = bpy.data.collections
 
         tracking_object = sc.clip.tracking.objects.active
         active_track = tracking_object.tracks.active
         empty = bpy.data.objects.new(f'{tracking_object.name}_{active_track.name}', None)
         empty.empty_display_size = sc.clip.tracking.settings.object_distance/2
         empty.empty_display_type = 'SPHERE'
-        bpy.data.collections["foreground"].objects.link(empty)
+        if collections.get("foreground"):
+           collections["foreground"].objects.link(empty)
+        else:
+            collections[0].objects.link(empty)
 
         con = empty.constraints.new(type='OBJECT_SOLVER')
         con.use_active_clip = True
