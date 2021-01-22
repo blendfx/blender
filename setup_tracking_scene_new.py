@@ -44,17 +44,19 @@ def CLIP_spaces_walk(context, all_screens, tarea, tspace, callback, *args):
                         callback(space, *args)
 
 
-def CLIP_set_viewport_background(context, clip, clip_user):
+def CLIP_check_camera_has_distortion(tracking_camera):
+    # TODO add new distortion_model
+    if tracking_camera.distortion_model == 'POLYNOMIAL':
+        return not all(k == 0 for k in (tracking_camera.k1,
+                                        tracking_camera.k2,
+                                        tracking_camera.k3))
+    elif tracking_camera.distortion_model == 'DIVISION':
+        return not all(k == 0 for k in (tracking_camera.division_k1,
+                                        tracking_camera.division_k2))
+    return False
 
-    def check_camera_has_distortion(tracking_camera):
-        if tracking_camera.distortion_model == 'POLYNOMIAL':
-            return not all(k == 0 for k in (tracking_camera.k1,
-                                            tracking_camera.k2,
-                                            tracking_camera.k3))
-        elif tracking_camera.distortion_model == 'DIVISION':
-            return not all(k == 0 for k in (tracking_camera.division_k1,
-                                            tracking_camera.division_k2))
-        return False
+
+def CLIP_set_viewport_background(context, clip, clip_user):
 
     def set_background(cam, clip, user):
         bgpic = None
@@ -70,7 +72,7 @@ def CLIP_set_viewport_background(context, clip, clip_user):
         bgpic.source = 'MOVIE_CLIP'
         bgpic.clip = clip
         bgpic.clip_user.proxy_render_size = user.proxy_render_size
-        if check_camera_has_distortion(clip.tracking.camera):
+        if CLIP_check_camera_has_distortion(clip.tracking.camera):
             bgpic.clip_user.use_render_undistorted = True
         bgpic.use_camera_clip = False
 
@@ -411,21 +413,22 @@ class CLIP_OT_new_setup_tracking_scene(Operator):
         tree = scene.node_tree
         clip = sc.clip
 
-        need_stabilization = False
+        need_undistortion =  CLIP_check_camera_has_distortion(clip.tracking.camera)
 
         # Remove all the nodes if they came from default node setup.
         # This is simplest way to make it so final node setup is correct.
         self._wipeDefaultNodes(tree)
 
         # Create nodes.
-        rlayer_fg = self._findOrCreateNode(tree, 'CompositorNodeRLayers')
+        rlayer = self._findOrCreateNode(tree, 'CompositorNodeRLayers')
         composite = self._findOrCreateNode(tree, 'CompositorNodeComposite')
 
         movieclip = tree.nodes.new(type='CompositorNodeMovieClip')
-        distortion = tree.nodes.new(type='CompositorNodeMovieDistortion')
 
-        if need_stabilization:
-            stabilize = tree.nodes.new(type='CompositorNodeStabilize2D')
+        if need_undistortion:
+            print("yes, we need undistortion")
+            distortion = tree.nodes.new(type='CompositorNodeMovieDistortion')
+
 
         scale = tree.nodes.new(type='CompositorNodeScale')
         alphaover = tree.nodes.new(type='CompositorNodeAlphaOver')
@@ -434,30 +437,26 @@ class CLIP_OT_new_setup_tracking_scene(Operator):
         # Setup nodes.
         movieclip.clip = clip
 
-        distortion.clip = clip
-        distortion.distortion_type = 'UNDISTORT'
-
-        if need_stabilization:
-            stabilize.clip = clip
+        if need_undistortion:
+            distortion.clip = clip
+            distortion.distortion_type = 'UNDISTORT'
 
         scale.space = 'RENDER_SIZE'
 
-        rlayer_fg.scene = scene
-        rlayer_fg.layer = "View Layer"
+        rlayer.scene = scene
+        rlayer.layer = "View Layer"
 
         # Create links.
-        tree.links.new(movieclip.outputs["Image"], distortion.inputs["Image"])
-
-        if need_stabilization:
-            tree.links.new(distortion.outputs["Image"],
-                           stabilize.inputs["Image"])
-            tree.links.new(stabilize.outputs["Image"], scale.inputs["Image"])
-        else:
+        if need_undistortion:
+            tree.links.new(movieclip.outputs["Image"], distortion.inputs["Image"])
             tree.links.new(distortion.outputs["Image"], scale.inputs["Image"])
+        else:
+            tree.links.new(movieclip.outputs["Image"], scale.inputs["Image"])
+
 
         tree.links.new(scale.outputs["Image"], alphaover.inputs[1])
 
-        tree.links.new(rlayer_fg.outputs["Image"], alphaover.inputs[2])
+        tree.links.new(rlayer.outputs["Image"], alphaover.inputs[2])
 
         tree.links.new(alphaover.outputs["Image"], composite.inputs["Image"])
         tree.links.new(alphaover.outputs["Image"], viewer.inputs["Image"])
@@ -465,18 +464,13 @@ class CLIP_OT_new_setup_tracking_scene(Operator):
         # Place nodes.
         movieclip.location = Vector((-300.0, 350.0))
 
-        distortion.location = movieclip.location
-        distortion.location += Vector((200.0, 0.0))
-
-        if need_stabilization:
-            stabilize.location = distortion.location
-            stabilize.location += Vector((200.0, 0.0))
-
-            scale.location = stabilize.location
-            scale.location += Vector((200.0, 0.0))
-        else:
+        if need_undistortion:
+            distortion.location = movieclip.location
+            distortion.location += Vector((200.0, 0.0))
             scale.location = distortion.location
-            scale.location += Vector((200.0, 0.0))
+        else:
+            scale.location = movieclip.location
+        scale.location += Vector((200.0, 0.0))
 
         alphaover.location = scale.location
         alphaover.location += Vector((250.0, -250.0))
@@ -486,6 +480,9 @@ class CLIP_OT_new_setup_tracking_scene(Operator):
 
         viewer.location = composite.location
         composite.location += Vector((0.0, 200.0))
+
+        rlayer.location = movieclip.location
+        rlayer.location += Vector((0.0, -375.0))
 
         # Ensure no nodes were created on the position of existing node.
         self._offsetNodes(tree)
