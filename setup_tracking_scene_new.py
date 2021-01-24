@@ -347,7 +347,6 @@ class CLIP_OT_new_setup_tracking_scene(Operator):
     @staticmethod
     def _findNode(tree, type):
         for node in tree.nodes:
-            print(node)
             if node.bl_idname == type:
                 return node
 
@@ -385,17 +384,45 @@ class CLIP_OT_new_setup_tracking_scene(Operator):
                 if a != b and a.location == b.location:
                     b.location += Vector((40.0, 20.0))
 
+
     def _setup_shadow_catcher(self, context, material):
         tree = material.node_tree
-        print(tree)
-        print(material)
 
-        diffuse = self._findOrCreateNode(tree, 'ShaderNodeBsdfDiffuse')
-        shader_to_rgb = self._findOrCreateNode(tree, 'ShaderNodeShaderToRGB')
-        colorramp = self._findOrCreateNode(tree, 'ShaderNodeValToRGB')
         principled = self._findOrCreateNode(tree, 'ShaderNodeBsdfPrincipled')
         output = self._findOrCreateNode(tree, 'ShaderNodeOutputMaterial')
 
+        tree.links.new(principled.outputs[0], output.inputs[0])
+
+        output.location = principled.location
+        output.location += Vector((300.0, 0.0))
+
+        if context.scene.render.engine == 'BLENDER_EEVEE':
+            diffuse = self._findOrCreateNode(tree, 'ShaderNodeBsdfDiffuse')
+            shader_to_rgb = self._findOrCreateNode(tree, 'ShaderNodeShaderToRGB')
+            maprange = self._findOrCreateNode(tree, 'ShaderNodeMapRange')
+
+            tree.links.new(diffuse.outputs[0], shader_to_rgb.inputs[0])
+            tree.links.new(shader_to_rgb.outputs[0], maprange.inputs[0])
+            tree.links.new(maprange.outputs[0], principled.inputs['Alpha'])
+
+
+            maprange.location = principled.location
+            maprange.location += Vector((-300.0, -300.0))
+
+            shader_to_rgb.location = maprange.location
+            shader_to_rgb.location += Vector((-200.0, 0.0))
+
+            diffuse.location = shader_to_rgb.location
+            diffuse.location += Vector((-200.0, 0.0))
+
+            maprange.interpolation_type = 'SMOOTHSTEP'
+            maprange.inputs[1].default_value = 0.3
+            maprange.inputs[2].default_value = 0
+
+            principled.inputs['Specular'].default_value = 0.0
+            principled.inputs['Base Color'].default_value = (0.1, 0.1, 0.1, 1.0)
+
+            material.blend_method = 'BLEND'
 
 
     def _setupNodes(self, context):
@@ -430,7 +457,6 @@ class CLIP_OT_new_setup_tracking_scene(Operator):
         movieclip = tree.nodes.new(type='CompositorNodeMovieClip')
 
         if need_undistortion:
-            print("yes, we need undistortion")
             distortion = tree.nodes.new(type='CompositorNodeMovieDistortion')
 
 
@@ -570,13 +596,27 @@ class CLIP_OT_new_setup_tracking_scene(Operator):
             """Make all the newly created and the old objects of a collection """ \
                 """to be properly setup for shadow catch"""
             for ob in collection.objects:
+                # assign or create correct shadowcatcher based on render engine
+                engine = context.scene.render.engine
+                engine_name = ""
+                if engine == "BLENDER_EEVEE":
+                    engine_name = "eevee"
+                elif engine == 'CYCLES':
+                    engine_name = "cycles"
+                shadowcatchername = f'shadowcatcher_{engine_name}'
+                if not bpy.data.materials.get(shadowcatchername):
+                    shadowcatcher_mat = bpy.data.materials.new(name=shadowcatchername)
+                else:
+                    shadowcatcher_mat = bpy.data.materials[shadowcatchername]
+                shadowcatcher_mat.use_nodes = True
+                self._setup_shadow_catcher(context, shadowcatcher_mat)
+                if not bool(ob.data.materials):
+                    ob.data.materials.append(shadowcatcher_mat)
+                else:
+                    ob.data.materials[0] = shadowcatcher_mat
                 if scene.render.engine == 'CYCLES':
                     ob.cycles.is_shadow_catcher = True
-                elif scene.render.engine == 'BLENDER_EEVEE':
-                    shadow_catcher_eevee = bpy.data.materials.new(name="shadow_catcher_eevee")
-                    shadow_catcher_eevee.use_nodes = True
-                    self._setup_shadow_catcher(context, shadow_catcher_eevee)
-                    ob.data.materials.append(shadow_catcher_eevee)
+                # put objects in collection
                 for child in collection.children:
                     setup_shadow_catcher_collection(child)
 
@@ -606,7 +646,6 @@ class CLIP_OT_new_setup_tracking_scene(Operator):
         # Create ground object if needed.
         if scene.use_shadow_catcher:
             bg_coll = bpy.data.collections["shadow catcher", None]
-            print("now create a shadow objects")
             ground = self._findGround(context)
             if not ground:
                 ground = self._createGround(bg_coll)
