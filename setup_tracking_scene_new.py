@@ -328,9 +328,8 @@ class CLIP_OT_new_setup_tracking_scene(Operator):
 
         collections = context.scene.collection.children
 
+        # rename base collection to foreground or create it
         if len(collections) == 1:
-            print("there seems to be exactly one")
-            print(collections[0].name)
             collections[0].name = "foreground"
         else:
             self.createCollection(context, "foreground")
