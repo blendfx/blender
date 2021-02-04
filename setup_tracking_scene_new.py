@@ -328,7 +328,12 @@ class CLIP_OT_new_setup_tracking_scene(Operator):
 
         collections = context.scene.collection.children
 
-        self.createCollection(context, "foreground")
+        if len(collections) == 1:
+            print("there seems to be exactly one")
+            print(collections[0].name)
+            collections[0].name = "foreground"
+        else:
+            self.createCollection(context, "foreground")
         if context.scene.use_shadow_catcher:
             self.createCollection(context, "shadow catcher")
 
