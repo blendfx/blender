@@ -1,9 +1,12 @@
 import bpy
-from bpy.types import Operator, Panel
+from bpy.props import StringProperty, CollectionProperty, IntProperty, BoolProperty
+from bpy.types import Operator, Panel, UIList, PropertyGroup
 
-def stop_playback(scene):
+
+
+def stop_recording(scene):
     if scene.frame_current == scene.frame_end:
-        bpy.ops.scene.vr_stop_recording()
+        bpy.ops.scene.vp_stop_recording()
 
 
 def create_recorder_empty(context, name):
@@ -16,11 +19,13 @@ def create_recorder_empty(context, name):
         object = bpy.data.objects.get(name)
 
     # create action if necessary
-    if not context.scene.vr_action_overwrite:
+    if not context.scene.vp_action_overwrite:
         if not object.animation_data:
             object.animation_data_create()
-        action = bpy.data.actions.new(scene.vr_action_name)
+        action = bpy.data.actions.new(scene.vp_action_name)
         object.animation_data.action = action
+        print("animation_data is:", object.animation_data.action)
+        object.animation_data.action.use_fake_user = True
 
     return object
 
@@ -35,17 +40,95 @@ def record_handler(scene, cam_ob):
     cam_ob.keyframe_insert(data_path="rotation_euler", frame=frame)
 
 
+
+class ListItem(PropertyGroup):
+    '''List of shot actions'''
+    name:  StringProperty(
+            name="ActionName",
+            description="Name of the action",
+            default="shot"
+            )
+
+
+class VP_ACTION_List(UIList):
+    '''List UI of shot actions'''
+    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
+        custom_icon = 'OBJECT_DATAMODE'
+
+        if self.layout_type in {'DEFAULT', 'COMPACT'}:
+            layout.prop(item, "name", text="", icon_value=icon, emboss=False)
+
+        elif self.layout_type in {'GRID'}:
+            layout.alignment='CENTER'
+            layout.label(text="", icon=custom_icon)
+
+
+class VP_OT_add_shot(Operator):
+    '''Add Selected Shot'''
+    bl_idname = "scene.add_vp_shot"
+    bl_label = "Add VP Shot"
+
+    def execute(self, context):
+        context.scene.vp_shot_list.add()
+
+        return {'FINISHED'}
+
+
+class VP_OT_play_shot(Operator):
+    '''Play the selected shot'''
+    bl_idname = "scene.vp_play_shot"
+    bl_label = "Play Shot"
+
+    # @classmethod
+    # def poll(cls, context):
+        # return len(context.object.vp_shot_list)>0
+
+    def execute(self, context):
+        scene = context.scene
+        index = context.object.vp_shot_list_index
+        action = bpy.data.actions[index]
+        print("playing ", action)
+        cam = bpy.data.objects[scene.vp_camera]
+        # store matrix
+        cam_matrix = cam.matrix_world
+        if not cam.animation_data:
+            cam.animation_data_create()
+        print(cam.animation_data.action)
+        cam.animation_data.action = action
+        bpy.ops.screen.animation_play()
+        # cam.animation_data_clear()
+
+        return {'FINISHED'}
+
+
+class VP_OT_delete_shot(Operator):
+    '''Delete Selected Shot'''
+    bl_idname = "scene.delete_item"
+    bl_label = "Delete VP Shot"
+
+    @classmethod
+    def poll(cls, context):
+        return context.scene.vp_shot_list
+
+    def execute(self, context):
+        scene = context.scene
+        index = context.object.vp_shot_list_index
+        bpy.data.actions.remove(bpy.data.actions[index])
+
+        return{'FINISHED'}
+
+
 class VIEW_3D_OT_toggle_dof(Operator):
-    """Toggle depth of field on the VR Camera"""
+    """Toggle depth of field on the VP Camera"""
     bl_idname = "scene.toggle_dof"
     bl_label = "Toggle Dof"
 
     @classmethod
     def poll(cls,context):
-        return bpy.data.objects.get(context.scene.vr_camera)
+        return bpy.data.objects.get(context.scene.vp_camera)
 
     def execute(self, context):
-        cam = bpy.data.objects.get(context.scene.vr_camera).data
+        cam = bpy.data.objects.get(context.scene.vp_camera).data
         if not cam.dof.use_dof: 
             cam.dof.use_dof = True
         else:
@@ -56,16 +139,16 @@ class VIEW_3D_OT_toggle_dof(Operator):
 class VIEW_3D_OT_change_focus(Operator):
     """Change increase or decrease the focus of the camera"""
     bl_idname = "scene.change_focus"
-    bl_label = "Change VR Focus"
+    bl_label = "Change VP Focus"
 
     focus_direction: bpy.props.BoolProperty(default=True)
 
     @classmethod
     def poll(cls,context):
-        return bpy.data.objects.get(context.scene.vr_camera)
+        return bpy.data.objects.get(context.scene.vp_camera)
 
     def execute(self, context):
-        cam = bpy.data.objects.get(context.scene.vr_camera).data
+        cam = bpy.data.objects.get(context.scene.vp_camera).data
         focus_step = 3
         if not self.focus_direction:
             focus_step = -focus_step
@@ -73,10 +156,10 @@ class VIEW_3D_OT_change_focus(Operator):
         return {'FINISHED'}
 
 
-class VIEW_3D_OT_vr_start_recording(Operator):
+class VIEW_3D_OT_vp_start_recording(Operator):
     """Assign a helper object, start playback and handle recording"""
-    bl_idname = "scene.vr_start_recording"
-    bl_label = "Start VR Recorder"
+    bl_idname = "scene.vp_start_recording"
+    bl_label = "Start VP Recorder"
 
     @classmethod
     def poll(cls, context):
@@ -94,8 +177,9 @@ class VIEW_3D_OT_vr_start_recording(Operator):
         # assign or create the recorder object
 
         cam_ob = create_recorder_empty(context, "Camera_helper_Empty")
-        if not scene.vr_action_overwrite:
+        if not scene.vp_action_overwrite:
             action = cam_ob.animation_data.action
+            bpy.ops.scene.add_vp_shot()
 
         cam.animation_data_clear()
         # play and handle recording
@@ -104,9 +188,9 @@ class VIEW_3D_OT_vr_start_recording(Operator):
         return {'FINISHED'}
 
 
-class VIEW_3D_OT_vr_stop_recording(Operator):
-    bl_idname = "scene.vr_stop_recording"
-    bl_label = "Stop VR Recorder"
+class VIEW_3D_OT_vp_stop_recording(Operator):
+    bl_idname = "scene.vp_stop_recording"
+    bl_label = "Stop VP Recorder"
 
     @classmethod
     def poll(cls, context):
@@ -120,20 +204,17 @@ class VIEW_3D_OT_vr_stop_recording(Operator):
         bpy.ops.screen.animation_cancel(restore_frame=False)
         if record_handler in bpy.app.handlers.frame_change_post:
             bpy.app.handlers.frame_change_post.remove(record_handler)
-        if not cam.animation_data:
-            cam.animation_data_create()
-        cam.animation_data.action = cam_ob.animation_data.action
-        cam_ob.animation_data.action.use_fake_user = True
+
         # set autokey back to what it was
         scene.tool_settings.use_keyframe_insert_auto = scene.autokeysetting
         return {'FINISHED'}
 
 
-class VIEW_3D_PT_vr_recorder(Panel):
-    bl_label = "VR Recorder"
+class VIEW_3D_PT_vp_playback(Panel):
+    bl_label = "VP Playback"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = "Item"
+    bl_category = 'VR'
     bl_context = 'objectmode'
 
     def draw(self, context):
@@ -141,9 +222,36 @@ class VIEW_3D_PT_vr_recorder(Panel):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-        layout.prop(scene, "vr_camera")
-        layout.prop(scene, "vr_action_overwrite")
-        layout.prop(scene, "vr_action_name")
+
+        row = layout.row()
+        col = row.column()
+        ob = context.object
+        col.template_list("VP_ACTION_List", "", bpy.data, "actions", ob, "vp_shot_list_index")
+        col.operator("scene.delete_item", text="REMOVE")
+        col.operator("scene.vp_play_shot")
+        # if scene.vp_shot_list_index >= 0 and scene.vp_shot_list:
+            # item = scene.vp_shot_list[scene.vp_shot_list_index]
+
+            # row = layout.row()
+            # row.prop(item, "name")
+
+
+class VIEW_3D_PT_vp_recorder(Panel):
+    bl_label = "VP Recorder"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'VR'
+    bl_context = 'objectmode'
+
+    def draw(self, context):
+        scene = context.scene
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        layout.prop(scene, "vp_camera")
+        layout.prop(scene, "recorded_object")
+        layout.prop(scene, "vp_action_overwrite")
+        layout.prop(scene, "vp_action_name")
 
         row = layout.row(align=True)
         row.label(text="Focus")
@@ -152,70 +260,88 @@ class VIEW_3D_PT_vr_recorder(Panel):
         row = layout.row()
         row.operator("scene.toggle_dof")
         row = layout.row(align=True)
-        row.operator("scene.vr_start_recording", text="Start Recording")
-        row.operator("scene.vr_stop_recording", text="Stop Recording")
+        row.operator("scene.vp_start_recording", text="Start Recording")
+        row.operator("scene.vp_stop_recording", text="Stop Recording")
+        row.operator("scene.add_vp_shot", text="asdf")
 
 
 
 classes = (
-        VIEW_3D_OT_vr_start_recording,
+        ListItem,
+        VP_ACTION_List,
+        VP_OT_play_shot,
+        VP_OT_delete_shot,
+        VP_OT_add_shot,
+        VIEW_3D_OT_vp_start_recording,
+        VIEW_3D_PT_vp_playback,
         VIEW_3D_OT_toggle_dof,
-        VIEW_3D_OT_vr_stop_recording,
+        VIEW_3D_OT_vp_stop_recording,
         VIEW_3D_OT_change_focus,
-        VIEW_3D_PT_vr_recorder
+        VIEW_3D_PT_vp_recorder
         )
 
 addon_keymaps = []
 
 def register():
-    bpy.types.Scene.vr_action_name = bpy.props.StringProperty(
+    for c in classes:
+        bpy.utils.register_class(c)
+
+    bpy.types.Scene.vp_action_name = StringProperty(
             name="Shot name",
             default="shot",
             description="Name of the action"
             )
-    bpy.types.Scene.recorded_object = bpy.props.StringProperty(
+    bpy.types.Scene.recorded_object = StringProperty(
             name="Recorded Object",
             default="Empty",
             description="Which Camera Object / Root is being recorded"
             )
-    bpy.types.Scene.vr_camera = bpy.props.StringProperty(
-            name="VR Camera",
-            default="Camera.001",
+    bpy.types.Scene.vp_camera = StringProperty(
+            name="VP Camera",
+            default="",
             description="Which Camera Object / Root is being recorded"
             )
-    bpy.types.Scene.autokeysetting = bpy.props.BoolProperty(
+    bpy.types.Scene.autokeysetting = BoolProperty(
             name="Use Autokey"
             )
-    bpy.types.Scene.vr_action_overwrite = bpy.props.BoolProperty(
-            name="Overwrite VR action",
+    bpy.types.Scene.vp_action_overwrite = BoolProperty(
+            name="Overwrite VP action",
             default=True,
-            description="Overwrite VR action or create a new one"
+            description="Overwrite VP action or create a new one"
+            )
+    bpy.types.Object.vp_shot_list_index = IntProperty(
+            name="Index of Shots",
+            default=0
+            )
+    bpy.types.Object.vp_shot_list = CollectionProperty(
+            type=ListItem
             )
 
-    for c in classes:
-        bpy.utils.register_class(c)
 
-    bpy.app.handlers.frame_change_pre.append(stop_playback)
+    bpy.app.handlers.frame_change_pre.append(stop_recording)
 
     # keymap
     wm = bpy.context.window_manager
     kc = wm.keyconfigs.addon
     if kc:
         km = kc.keymaps.new(name='3D View', space_type= 'VIEW_3D')
-        kmi = km.keymap_items.new("scene.vr_start_recording", type='J', value='PRESS')
-        kmi = km.keymap_items.new("scene.vr_stop_recording", type='L', value='PRESS')
+        kmi = km.keymap_items.new("scene.vp_start_recording", type='J', value='PRESS')
+        kmi = km.keymap_items.new("scene.vp_stop_recording", type='L', value='PRESS')
         addon_keymaps.append((km, kmi))
-
 
 
 def unregister():
     for c in classes:
         bpy.utils.unregister_class(c)
-    bpy.app.handlers.frame_change_pre.remove(stop_playback)
+
+    bpy.app.handlers.frame_change_pre.remove(stop_recording)
 
     for km, kmi in addon_keymaps:
         km.keymap_items.remove(kmi)
     addon_keymaps.clear()
+
+    del bpy.types.Scene.vp_shot_list
+    del bpy.types.Scene.vp_shot_list_index
 
 
 if __name__ == "__main__":
