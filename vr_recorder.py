@@ -30,6 +30,7 @@ def create_recorder_empty(context, name):
     return object
 
 
+
 def record_handler(scene, cam_ob):
     frame = scene.frame_current
     cam = bpy.data.objects.get(scene.recorded_object)
@@ -38,6 +39,13 @@ def record_handler(scene, cam_ob):
     cam_ob.rotation_euler = cam.rotation_euler
     cam_ob.keyframe_insert(data_path="location", frame=frame)
     cam_ob.keyframe_insert(data_path="rotation_euler", frame=frame)
+
+
+def playback_handler(scene):
+    frame = scene.frame_current
+    cam = bpy.data.objects.get(scene.vp_camera)
+    player = bpy.data.objects.get("player")
+    cam.matrix_world = player.matrix_world
 
 
 
@@ -50,7 +58,7 @@ class ListItem(PropertyGroup):
             )
 
 
-class VP_ACTION_List(UIList):
+class VP_UL_shot_list(UIList):
     '''List UI of shot actions'''
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         custom_icon = 'OBJECT_DATAMODE'
@@ -69,8 +77,7 @@ class VP_OT_add_shot(Operator):
     bl_label = "Add VP Shot"
 
     def execute(self, context):
-        context.scene.vp_shot_list.add()
-
+        context.object.vp_shot_list.add()
         return {'FINISHED'}
 
 
@@ -79,23 +86,59 @@ class VP_OT_play_shot(Operator):
     bl_idname = "scene.vp_play_shot"
     bl_label = "Play Shot"
 
-    # @classmethod
-    # def poll(cls, context):
-        # return len(context.object.vp_shot_list)>0
+    @classmethod
+    def poll(cls, context):
+        return bpy.data.objects.get(context.scene.vp_camera)
+
+    def modal(self, context, event):
+        if event.type in {'RIGHTMOUSE', 'ESC'}:
+            self.cancel(context)
+            return {'CANCELLED'}
+        return {'PASS_THROUGH'}
 
     def execute(self, context):
+        wm = context.window_manager
+        wm.modal_handler_add(self)
         scene = context.scene
         index = context.object.vp_shot_list_index
         action = bpy.data.actions[index]
         print("playing ", action)
         cam = bpy.data.objects[scene.vp_camera]
         # store matrix
-        cam_matrix = cam.matrix_world
-        if not cam.animation_data:
-            cam.animation_data_create()
-        print(cam.animation_data.action)
+        self.cam_matrix = cam.matrix_world
+        print(bpy.data.objects[context.scene.vp_camera].matrix_world)
+        # if not cam.animation_data:
+            # cam.animation_data_create()
+        # print(cam.animation_data.action)
+        # cam.animation_data.action = action
+
+        scene = context.scene
+        # create object if necessary
+        if not "player" in bpy.data.objects:
+            player = bpy.data.objects.new("player", None)
+        else:
+            player = bpy.data.objects.get("player")
+        if not player.name in scene.collection.objects:
+            scene.collection.objects.link(player)
+
+        cam.animation_data_create()
         cam.animation_data.action = action
+
         bpy.ops.screen.animation_play()
+        # bpy.app.handlers.frame_change_post.append(playback_handler)
+
+        # cam.animation_data_clear()
+
+        return {'RUNNING_MODAL'}
+
+    def cancel(self, context):
+        wm = context.window_manager
+        scene = context.scene
+        bpy.ops.screen.animation_cancel(restore_frame=False)
+        cam = bpy.data.objects[scene.vp_camera]
+        cam.animation_data_clear()
+        print(bpy.data.objects[context.scene.vp_camera].location)
+        bpy.data.objects[context.scene.vp_camera].matrix_world = self.cam_matrix
         # cam.animation_data_clear()
 
         return {'FINISHED'}
@@ -108,7 +151,7 @@ class VP_OT_delete_shot(Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.scene.vp_shot_list
+        return context.object.vp_shot_list
 
     def execute(self, context):
         scene = context.scene
@@ -226,7 +269,7 @@ class VIEW_3D_PT_vp_playback(Panel):
         row = layout.row()
         col = row.column()
         ob = context.object
-        col.template_list("VP_ACTION_List", "", bpy.data, "actions", ob, "vp_shot_list_index")
+        col.template_list("VP_UL_shot_list", "", bpy.data, "actions", ob, "vp_shot_list_index")
         col.operator("scene.delete_item", text="REMOVE")
         col.operator("scene.vp_play_shot")
         # if scene.vp_shot_list_index >= 0 and scene.vp_shot_list:
@@ -268,7 +311,7 @@ class VIEW_3D_PT_vp_recorder(Panel):
 
 classes = (
         ListItem,
-        VP_ACTION_List,
+        VP_UL_shot_list,
         VP_OT_play_shot,
         VP_OT_delete_shot,
         VP_OT_add_shot,
@@ -317,7 +360,6 @@ def register():
             type=ListItem
             )
 
-
     bpy.app.handlers.frame_change_pre.append(stop_recording)
 
     # keymap
@@ -335,6 +377,7 @@ def unregister():
         bpy.utils.unregister_class(c)
 
     bpy.app.handlers.frame_change_pre.remove(stop_recording)
+    bpy.app.handlers.frame_change_pre.remove(playback_handler)
 
     for km, kmi in addon_keymaps:
         km.keymap_items.remove(kmi)
