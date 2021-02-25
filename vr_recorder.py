@@ -5,9 +5,9 @@ from bpy.types import Operator, Panel, UIList, PropertyGroup
 
 
 def stop_recording(scene):
+    '''automatically stop recording when animation has reached the last frame'''
     if scene.frame_current == scene.frame_end:
         bpy.ops.scene.vp_stop_recording()
-
 
 def create_recorder_empty(context, name):
     """ create recorder object and create action if necessary """
@@ -24,11 +24,10 @@ def create_recorder_empty(context, name):
             object.animation_data_create()
         action = bpy.data.actions.new(scene.vp_action_name)
         object.animation_data.action = action
-        print("animation_data is:", object.animation_data.action)
+        print("animation_data is:", object.animation_data.action.name)
         object.animation_data.action.use_fake_user = True
 
     return object
-
 
 
 def record_handler(scene, cam_ob):
@@ -39,14 +38,6 @@ def record_handler(scene, cam_ob):
     cam_ob.rotation_euler = cam.rotation_euler
     cam_ob.keyframe_insert(data_path="location", frame=frame)
     cam_ob.keyframe_insert(data_path="rotation_euler", frame=frame)
-
-
-def playback_handler(scene):
-    frame = scene.frame_current
-    cam = bpy.data.objects.get(scene.vp_camera)
-    player = bpy.data.objects.get("player")
-    cam.matrix_world = player.matrix_world
-
 
 
 class ListItem(PropertyGroup):
@@ -72,7 +63,7 @@ class VP_UL_shot_list(UIList):
 
 
 class VP_OT_add_shot(Operator):
-    '''Add Selected Shot'''
+    '''Add a new shot'''
     bl_idname = "scene.add_vp_shot"
     bl_label = "Add VP Shot"
 
@@ -91,56 +82,49 @@ class VP_OT_play_shot(Operator):
         return bpy.data.objects.get(context.scene.vp_camera)
 
     def modal(self, context, event):
+        '''run modal until we cancel'''
         if event.type in {'RIGHTMOUSE', 'ESC'}:
             self.cancel(context)
             return {'CANCELLED'}
         return {'PASS_THROUGH'}
 
     def execute(self, context):
-        wm = context.window_manager
-        wm.modal_handler_add(self)
+        data = bpy.data
         scene = context.scene
         index = context.object.vp_shot_list_index
-        action = bpy.data.actions[index]
-        print("playing ", action)
-        cam = bpy.data.objects[scene.vp_camera]
-        # store matrix
-        self.cam_matrix = cam.matrix_world
-        print(bpy.data.objects[context.scene.vp_camera].matrix_world)
-        # if not cam.animation_data:
-            # cam.animation_data_create()
-        # print(cam.animation_data.action)
-        # cam.animation_data.action = action
+        action = data.actions[index]
+        wm = context.window_manager
+        wm.modal_handler_add(self)
 
-        scene = context.scene
-        # create object if necessary
-        if not "player" in bpy.data.objects:
-            player = bpy.data.objects.new("player", None)
+        # create player if necessary
+        if not "player" in data.objects:
+            player = data.objects.new("player", None)
         else:
-            player = bpy.data.objects.get("player")
-        if not player.name in scene.collection.objects:
-            scene.collection.objects.link(player)
+            player = data.objects.get("player")
+        # we do not really need to link the player to the scene
 
-        cam.animation_data_create()
-        cam.animation_data.action = action
+        # assign action to the player
+        player.animation_data_create()
+        player.animation_data.action = action
+
+        # add copy transform constraint to the camera
+        cam = data.objects[scene.vp_camera]
+        constraint = cam.constraints.new('COPY_TRANSFORMS')
+        constraint.target = player
 
         bpy.ops.screen.animation_play()
-        # bpy.app.handlers.frame_change_post.append(playback_handler)
-
-        # cam.animation_data_clear()
 
         return {'RUNNING_MODAL'}
 
     def cancel(self, context):
-        wm = context.window_manager
+        '''cancel animation an remove contraints'''
         scene = context.scene
         bpy.ops.screen.animation_cancel(restore_frame=False)
         cam = bpy.data.objects[scene.vp_camera]
-        cam.animation_data_clear()
-        print(bpy.data.objects[context.scene.vp_camera].location)
-        bpy.data.objects[context.scene.vp_camera].matrix_world = self.cam_matrix
-        # cam.animation_data_clear()
-
+        for c in cam.constraints:
+            if not c.target.name == "player":
+                continue
+            cam.constraints.remove(c)
         return {'FINISHED'}
 
 
@@ -157,6 +141,25 @@ class VP_OT_delete_shot(Operator):
         scene = context.scene
         index = context.object.vp_shot_list_index
         bpy.data.actions.remove(bpy.data.actions[index])
+
+        return{'FINISHED'}
+
+
+class VP_OT_use_shot(Operator):
+    '''Assign selected shot to camera'''
+    bl_idname = "scene.use_shot"
+    bl_label = "Delete VP Shot"
+
+    @classmethod
+    def poll(cls, context):
+        return context.object.vp_shot_list
+
+    def execute(self, context):
+        scene = context.scene
+        index = context.object.vp_shot_list_index
+        cam = bpy.data.objects[scene.vp_camera]
+        cam.animation_data_create()
+        cam.animation_data.action = bpy.data.actions[index]
 
         return{'FINISHED'}
 
@@ -232,6 +235,7 @@ class VIEW_3D_OT_vp_start_recording(Operator):
 
 
 class VIEW_3D_OT_vp_stop_recording(Operator):
+    '''Stop recording and cancel animation'''
     bl_idname = "scene.vp_stop_recording"
     bl_label = "Stop VP Recorder"
 
@@ -251,32 +255,6 @@ class VIEW_3D_OT_vp_stop_recording(Operator):
         # set autokey back to what it was
         scene.tool_settings.use_keyframe_insert_auto = scene.autokeysetting
         return {'FINISHED'}
-
-
-class VIEW_3D_PT_vp_playback(Panel):
-    bl_label = "VP Playback"
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_category = 'VR'
-    bl_context = 'objectmode'
-
-    def draw(self, context):
-        scene = context.scene
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False
-
-        row = layout.row()
-        col = row.column()
-        ob = context.object
-        col.template_list("VP_UL_shot_list", "", bpy.data, "actions", ob, "vp_shot_list_index")
-        col.operator("scene.delete_item", text="REMOVE")
-        col.operator("scene.vp_play_shot")
-        # if scene.vp_shot_list_index >= 0 and scene.vp_shot_list:
-            # item = scene.vp_shot_list[scene.vp_shot_list_index]
-
-            # row = layout.row()
-            # row.prop(item, "name")
 
 
 class VIEW_3D_PT_vp_recorder(Panel):
@@ -305,8 +283,28 @@ class VIEW_3D_PT_vp_recorder(Panel):
         row = layout.row(align=True)
         row.operator("scene.vp_start_recording", text="Start Recording")
         row.operator("scene.vp_stop_recording", text="Stop Recording")
-        row.operator("scene.add_vp_shot", text="asdf")
 
+
+class VIEW_3D_PT_vp_playback(Panel):
+    bl_label = "VP Playback"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'UI'
+    bl_category = 'VR'
+    bl_context = 'objectmode'
+
+    def draw(self, context):
+        scene = context.scene
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        row = layout.row()
+        col = row.column()
+        ob = context.object
+        col.template_list("VP_UL_shot_list", "", bpy.data, "actions", ob, "vp_shot_list_index")
+        col.operator("scene.vp_play_shot")
+        col.operator("scene.delete_item", text="Remove Shot")
+        col.operator("scene.use_shot", text="Use Shot")
 
 
 classes = (
@@ -314,6 +312,7 @@ classes = (
         VP_UL_shot_list,
         VP_OT_play_shot,
         VP_OT_delete_shot,
+        VP_OT_use_shot,
         VP_OT_add_shot,
         VIEW_3D_OT_vp_start_recording,
         VIEW_3D_PT_vp_playback,
@@ -377,7 +376,6 @@ def unregister():
         bpy.utils.unregister_class(c)
 
     bpy.app.handlers.frame_change_pre.remove(stop_recording)
-    bpy.app.handlers.frame_change_pre.remove(playback_handler)
 
     for km, kmi in addon_keymaps:
         km.keymap_items.remove(kmi)
