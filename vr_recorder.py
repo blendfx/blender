@@ -33,9 +33,12 @@ def create_recorder_empty(context, name):
 def record_handler(scene, cam_ob):
     frame = scene.frame_current
     cam = bpy.data.objects.get(scene.recorded_object)
+    vr_cam = bpy.data.objects.get(scene.vp_camera)
     cam_ob = bpy.data.objects.get("Camera_helper_Empty")
     cam_ob.location = cam.location
     cam_ob.rotation_euler = cam.rotation_euler
+    # cam_ob.rotation_euler[0] = cam_ob.rotation_euler[0] - vr_cam.rotation_euler[0]
+    # cam_ob.rotation_euler[1] = cam_ob.rotation_euler[1] - vr_cam.rotation_euler[1]
     cam_ob.keyframe_insert(data_path="location", frame=frame)
     cam_ob.keyframe_insert(data_path="rotation_euler", frame=frame)
 
@@ -83,9 +86,13 @@ class VP_OT_play_shot(Operator):
 
     def modal(self, context, event):
         '''run modal until we cancel'''
+        scene = context.scene
         if event.type in {'RIGHTMOUSE', 'ESC'}:
             self.cancel(context)
             return {'CANCELLED'}
+        if scene.frame_current == scene.frame_end:
+            self.cancel(context)
+            return {'FINISHED'}
         return {'PASS_THROUGH'}
 
     def execute(self, context):
@@ -107,9 +114,17 @@ class VP_OT_play_shot(Operator):
         player.animation_data_create()
         player.animation_data.action = action
 
-        # add copy transform constraint to the camera
         cam = data.objects[scene.vp_camera]
+
+        # mute all constraints during playback
+        self.temp_constraints_list = []
+        for c in cam.constraints:
+            c.mute = True
+            self.temp_constraints_list.append(c)
+
+        # add copy transform constraint to the camera
         constraint = cam.constraints.new('COPY_TRANSFORMS')
+        constraint.name = "temp_vp_player"
         constraint.target = player
 
         bpy.ops.screen.animation_play()
@@ -119,10 +134,10 @@ class VP_OT_play_shot(Operator):
     def cancel(self, context):
         '''cancel animation an remove contraints'''
         scene = context.scene
-        bpy.ops.screen.animation_cancel(restore_frame=False)
+        bpy.ops.screen.animation_cancel(restore_frame=True)
         cam = bpy.data.objects[scene.vp_camera]
         for c in cam.constraints:
-            if not c.target.name == "player":
+            if not c.name == "temp_vp_player":
                 continue
             cam.constraints.remove(c)
         return {'FINISHED'}
