@@ -1,5 +1,7 @@
+# utilities to control and playback Virtual Production recordings
 import bpy
-from bpy.props import StringProperty, CollectionProperty, IntProperty, BoolProperty
+from pathlib import Path
+from bpy.props import StringProperty, CollectionProperty, IntProperty, BoolProperty, PointerProperty
 from bpy.types import Operator, Panel, UIList, PropertyGroup
 
 
@@ -28,6 +30,19 @@ def create_recorder_empty(context, name):
         object.animation_data.action.use_fake_user = True
 
     return object
+
+
+def filerecord_handler(scene):
+    frame = scene.frame_current
+    cam = bpy.data.objects.get(scene.recorded_object)
+    scene.export_group.frame = frame
+    home = Path.home()
+    filename = "testfile.txt"
+    testfile = open(str(home / filename), "a+")
+    testfile.write(str(frame)+"\n")
+
+    # cam_ob.rotation_euler[0] = cam_ob.rotation_euler[0] - vr_cam.rotation_euler[0]
+    # cam_ob.rotation_euler[1] = cam_ob.rotation_euler[1] - vr_cam.rotation_euler[1]
 
 
 def record_handler(scene, cam_ob):
@@ -217,6 +232,51 @@ class VIEW_3D_OT_change_focus(Operator):
         return {'FINISHED'}
 
 
+class VIEW_3D_OT_vp_file_recorder(Operator):
+    """Record the animation to a file"""
+    bl_idname = "scene.vp_file_recorder"
+    bl_label = "Start VP FileRecorder"
+
+    @classmethod
+    def poll(cls, context):
+        return bpy.data.objects.get(context.scene.recorded_object)
+
+    def modal(self, context, event):
+        '''run modal until we cancel'''
+        scene = context.scene
+        if event.type in {'RIGHTMOUSE', 'ESC'}:
+            self.cancel(context)
+            return {'CANCELLED'}
+        if scene.frame_current == scene.frame_end:
+            self.cancel(context)
+            return {'FINISHED'}
+        return {'PASS_THROUGH'}
+
+    def execute(self, context):
+        data = bpy.data
+        scene = context.scene
+        scene.frame_current = scene.frame_start
+        wm = context.window_manager
+        wm.modal_handler_add(self)
+
+        home = Path.home()
+        filename = "testfile.txt"
+        testfile = open(str(home / filename), "w")
+        # make sure the file is empty
+        testfile.write("")
+        bpy.ops.screen.animation_play()
+        bpy.app.handlers.frame_change_post.append(filerecord_handler)
+
+        return {'RUNNING_MODAL'}
+
+    def cancel(self, context):
+        '''cancel animation an remove contraints'''
+        scene = context.scene
+        print(scene.export_group.frame)
+        bpy.ops.screen.animation_cancel(restore_frame=True)
+        bpy.app.handlers.frame_change_post.remove(filerecord_handler)
+        return {'FINISHED'}
+
 class VIEW_3D_OT_vp_start_recording(Operator):
     """Assign a helper object, start playback and handle recording"""
     bl_idname = "scene.vp_start_recording"
@@ -298,6 +358,7 @@ class VIEW_3D_PT_vp_recorder(Panel):
         row = layout.row(align=True)
         row.operator("scene.vp_start_recording", text="Start Recording")
         row.operator("scene.vp_stop_recording", text="Stop Recording")
+        row.operator("scene.vp_file_recorder", text="File Recorder")
 
 
 class VIEW_3D_PT_vp_playback(Panel):
@@ -329,6 +390,7 @@ classes = (
         VP_OT_delete_shot,
         VP_OT_use_shot,
         VP_OT_add_shot,
+        VIEW_3D_OT_vp_file_recorder,
         VIEW_3D_OT_vp_start_recording,
         VIEW_3D_PT_vp_playback,
         VIEW_3D_OT_toggle_dof,
