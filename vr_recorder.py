@@ -1,4 +1,3 @@
-# utilities to control and playback Virtual Production recordings
 import bpy
 from pathlib import Path
 from bpy.props import StringProperty, CollectionProperty, IntProperty, BoolProperty, PointerProperty
