@@ -84,11 +84,11 @@ class VP_UL_shot_list(UIList):
 
 class VP_OT_add_shot(Operator):
     '''Add a new shot'''
-    Objectl_idname = "scene.add_vp_shot"
+    bl_idname = "scene.add_vp_shot"
     bl_label = "Add VP Shot"
 
     def execute(self, context):
-        context.scene.vp_shot_list.add()
+        context.object.vp_shot_list.add()
         return {'FINISHED'}
 
 
@@ -116,7 +116,7 @@ class VP_OT_play_shot(Operator):
         data = bpy.data
         scene = context.scene
         # get the action by addressing the index
-        index = context.scene.vp_shot_list_index
+        index = context.object.vp_shot_list_index
         action = data.actions[index]
 
         # initirate handler
@@ -168,11 +168,11 @@ class VP_OT_delete_shot(Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.scene.vp_shot_list
+        return context.object.vp_shot_list
 
     def execute(self, context):
         scene = context.scene
-        index = context.scene.vp_shot_list_index
+        index = context.object.vp_shot_list_index
         bpy.data.actions.remove(bpy.data.actions[index])
 
         return{'FINISHED'}
@@ -185,11 +185,11 @@ class VP_OT_use_shot(Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.scene.vp_shot_list
+        return context.object.vp_shot_list
 
     def execute(self, context):
         scene = context.scene
-        index = context.scene.vp_shot_list_index
+        index = context.object.vp_shot_list_index
         cam = bpy.data.objects[scene.vp_camera]
         cam.animation_data_create()
         cam.animation_data.action = bpy.data.actions[index]
@@ -428,18 +428,14 @@ def register():
             )
     bpy.types.Scene.vp_action_overwrite = BoolProperty(
             name="Overwrite VP action",
-            default=False,
+            default=True,
             description="Overwrite VP action or create a new one"
             )
-    bpy.types.Scene.vp_shot_list_index = IntProperty(
+    bpy.types.Object.vp_shot_list_index = IntProperty(
             name="Index of Shots",
             default=0
             )
-    bpy.types.Scene.vp_last_recorded_index = IntProperty(
-            name="Index of last recorded shot",
-            default=0
-            )
-    bpy.types.Scene.vp_shot_list = CollectionProperty(
+    bpy.types.Object.vp_shot_list = CollectionProperty(
             type=ListItem
             )
 
