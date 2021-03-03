@@ -4,7 +4,6 @@ from bpy.props import StringProperty, CollectionProperty, IntProperty, BoolPrope
 from bpy.types import Operator, Panel, UIList, PropertyGroup
 
 
-
 def stop_recording(scene):
     '''automatically stop recording when animation has reached the last frame'''
     if scene.frame_current == scene.frame_end:
@@ -118,28 +117,20 @@ class VP_OT_play_shot(Operator):
         wm.modal_handler_add(self)
 
         # create player if necessary
-        if not "player" in data.objects:
-            player = data.objects.new("player", None)
+        if not "temp_player_cam" in data.cameras:
+            player_cam = data.cameras.new("temp_player_cam")
+        player_cam = data.cameras.get("temp_player_cam")
+        if not "temp_player_camera" in data.objects:
+            player = data.objects.new("temp_player_camera", player_cam)
         else:
-            player = data.objects.get("player")
-        # we do not really need to link the player to the scene
-
+            player = data.objects.get("temp_player_camera")
+            player.data = player_cam
+            
         # assign action to the player
         player.animation_data_create()
         player.animation_data.action = action
 
-        cam = data.objects[scene.vp_camera]
-
-        # mute all constraints during playback
-        self.temp_constraints_list = []
-        for c in cam.constraints:
-            c.mute = True
-            self.temp_constraints_list.append(c)
-
-        # add copy transform constraint to the camera
-        constraint = cam.constraints.new('COPY_TRANSFORMS')
-        constraint.name = "temp_vp_player"
-        constraint.target = player
+        scene.camera = player
 
         bpy.ops.screen.animation_play()
 
@@ -150,10 +141,7 @@ class VP_OT_play_shot(Operator):
         scene = context.scene
         bpy.ops.screen.animation_cancel(restore_frame=True)
         cam = bpy.data.objects[scene.vp_camera]
-        for c in cam.constraints:
-            if not c.name == "temp_vp_player":
-                continue
-            cam.constraints.remove(c)
+        scene.camera = cam
         return {'FINISHED'}
 
 
