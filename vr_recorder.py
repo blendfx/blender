@@ -1,4 +1,5 @@
 import bpy
+import math
 from pathlib import Path
 from bpy.props import StringProperty, CollectionProperty, IntProperty, BoolProperty, PointerProperty
 from bpy.types import Operator, Panel, UIList, PropertyGroup
@@ -48,8 +49,11 @@ def record_handler(scene, cam_ob):
     cam = bpy.data.objects.get(scene.recorded_object)
     vr_cam = bpy.data.objects.get(scene.vp_camera)
     cam_ob = bpy.data.objects.get("Camera_helper_Empty")
-    cam_ob.location = cam.location
-    cam_ob.rotation_euler = cam.rotation_euler
+    cam_ob.matrix_world = cam.matrix_world
+    # cam_ob.location = cam.location
+    # cam_ob.rotation_euler[0] = cam.rotation_euler[0] - math.radians(90)
+    # cam_ob.rotation_euler[1] = cam.rotation_euler[1] - math.radians(180)
+    # cam_ob.rotation_euler[2] = cam.rotation_euler[2]
     # cam_ob.rotation_euler[0] = cam_ob.rotation_euler[0] - vr_cam.rotation_euler[0]
     # cam_ob.rotation_euler[1] = cam_ob.rotation_euler[1] - vr_cam.rotation_euler[1]
     cam_ob.keyframe_insert(data_path="location", frame=frame)
@@ -80,11 +84,11 @@ class VP_UL_shot_list(UIList):
 
 class VP_OT_add_shot(Operator):
     '''Add a new shot'''
-    bl_idname = "scene.add_vp_shot"
+    Objectl_idname = "scene.add_vp_shot"
     bl_label = "Add VP Shot"
 
     def execute(self, context):
-        context.object.vp_shot_list.add()
+        context.scene.vp_shot_list.add()
         return {'FINISHED'}
 
 
@@ -111,27 +115,38 @@ class VP_OT_play_shot(Operator):
     def execute(self, context):
         data = bpy.data
         scene = context.scene
-        index = context.object.vp_shot_list_index
+        # get the action by addressing the index
+        index = context.scene.vp_shot_list_index
         action = data.actions[index]
+
+        # initirate handler
         wm = context.window_manager
         wm.modal_handler_add(self)
+        vp_camera = data.objects.get(scene.vp_camera)
 
-        # create player if necessary
+        # create player camera if necessary
         if not "temp_player_cam" in data.cameras:
             player_cam = data.cameras.new("temp_player_cam")
         player_cam = data.cameras.get("temp_player_cam")
+        # configure camera data
+        player_cam.lens = vp_camera.data.lens
+        player_cam.sensor_width = vp_camera.data.sensor_width
+        # link player data to temp camera object
         if not "temp_player_camera" in data.objects:
             player = data.objects.new("temp_player_camera", player_cam)
         else:
             player = data.objects.get("temp_player_camera")
             player.data = player_cam
-            
+
         # assign action to the player
         player.animation_data_create()
         player.animation_data.action = action
 
+        # make player the active camera
         scene.camera = player
-
+        # start from frame one
+        scene.frame_current = scene.frame_start
+        # play animation
         bpy.ops.screen.animation_play()
 
         return {'RUNNING_MODAL'}
@@ -140,6 +155,7 @@ class VP_OT_play_shot(Operator):
         '''cancel animation an remove contraints'''
         scene = context.scene
         bpy.ops.screen.animation_cancel(restore_frame=True)
+        # set scene camera back to vp_camera
         cam = bpy.data.objects[scene.vp_camera]
         scene.camera = cam
         return {'FINISHED'}
@@ -152,11 +168,11 @@ class VP_OT_delete_shot(Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.object.vp_shot_list
+        return context.scene.vp_shot_list
 
     def execute(self, context):
         scene = context.scene
-        index = context.object.vp_shot_list_index
+        index = context.scene.vp_shot_list_index
         bpy.data.actions.remove(bpy.data.actions[index])
 
         return{'FINISHED'}
@@ -169,11 +185,11 @@ class VP_OT_use_shot(Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.object.vp_shot_list
+        return context.scene.vp_shot_list
 
     def execute(self, context):
         scene = context.scene
-        index = context.object.vp_shot_list_index
+        index = context.scene.vp_shot_list_index
         cam = bpy.data.objects[scene.vp_camera]
         cam.animation_data_create()
         cam.animation_data.action = bpy.data.actions[index]
@@ -412,14 +428,18 @@ def register():
             )
     bpy.types.Scene.vp_action_overwrite = BoolProperty(
             name="Overwrite VP action",
-            default=True,
+            default=False,
             description="Overwrite VP action or create a new one"
             )
-    bpy.types.Object.vp_shot_list_index = IntProperty(
+    bpy.types.Scene.vp_shot_list_index = IntProperty(
             name="Index of Shots",
             default=0
             )
-    bpy.types.Object.vp_shot_list = CollectionProperty(
+    bpy.types.Scene.vp_last_recorded_index = IntProperty(
+            name="Index of last recorded shot",
+            default=0
+            )
+    bpy.types.Scene.vp_shot_list = CollectionProperty(
             type=ListItem
             )
 
