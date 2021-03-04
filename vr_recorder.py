@@ -23,15 +23,17 @@ def create_recorder_empty(context, name):
     if not context.scene.vp_action_overwrite:
         if not object.animation_data:
             object.animation_data_create()
-        action = bpy.data.actions.new(scene.vp_action_name)
+        action_name = f'{scene.vp_action_name}_{name[:3].upper()}'
+        action = bpy.data.actions.new(action_name)
         object.animation_data.action = action
-        print("animation_data is:", object.animation_data.action.name)
         object.animation_data.action.use_fake_user = True
 
     return object
 
 
 def filerecord_handler(scene):
+    ''' Write transformn data to file'''
+    # XXX this does not work yet
     frame = scene.frame_current
     cam = bpy.data.objects.get(scene.recorded_object)
     scene.export_group.frame = frame
@@ -39,25 +41,29 @@ def filerecord_handler(scene):
     filename = "testfile.txt"
     testfile = open(str(home / filename), "a+")
     testfile.write(str(frame)+"\n")
-
     # cam_ob.rotation_euler[0] = cam_ob.rotation_euler[0] - vr_cam.rotation_euler[0]
     # cam_ob.rotation_euler[1] = cam_ob.rotation_euler[1] - vr_cam.rotation_euler[1]
 
 
 def record_handler(scene, cam_ob):
+    ''' Write keyframes to action of Camera_helper_Empty '''
     frame = scene.frame_current
     cam = bpy.data.objects.get(scene.recorded_object)
     vr_cam = bpy.data.objects.get(scene.vp_camera)
     cam_ob = bpy.data.objects.get("Camera_helper_Empty")
     cam_ob.matrix_world = cam.matrix_world
-    # cam_ob.location = cam.location
-    # cam_ob.rotation_euler[0] = cam.rotation_euler[0] - math.radians(90)
-    # cam_ob.rotation_euler[1] = cam.rotation_euler[1] - math.radians(180)
-    # cam_ob.rotation_euler[2] = cam.rotation_euler[2]
-    # cam_ob.rotation_euler[0] = cam_ob.rotation_euler[0] - vr_cam.rotation_euler[0]
-    # cam_ob.rotation_euler[1] = cam_ob.rotation_euler[1] - vr_cam.rotation_euler[1]
+    # write keyframes
     cam_ob.keyframe_insert(data_path="location", frame=frame)
     cam_ob.keyframe_insert(data_path="rotation_euler", frame=frame)
+
+    # record controller, if available
+    controller = bpy.data.objects.get(scene.recorded_controller)
+    if not controller:
+        return
+    controller_ob = bpy.data.objects.get("Controller_helper_Empty")
+    controller_ob.matrix_world = controller.matrix_world
+    controller_ob.keyframe_insert(data_path="location", frame=frame)
+    controller_ob.keyframe_insert(data_path="rotation_euler", frame=frame)
 
 
 class ListItem(PropertyGroup):
@@ -280,6 +286,7 @@ class VIEW_3D_OT_vp_file_recorder(Operator):
         bpy.app.handlers.frame_change_post.remove(filerecord_handler)
         return {'FINISHED'}
 
+
 class VIEW_3D_OT_vp_start_recording(Operator):
     """Assign a helper object, start playback and handle recording"""
     bl_idname = "scene.vp_start_recording"
@@ -297,15 +304,20 @@ class VIEW_3D_OT_vp_start_recording(Operator):
         scene.tool_settings.use_keyframe_insert_auto = True
 
         # get vr camera and clear animation
-        cam = bpy.data.objects.get(context.scene.recorded_object)
-        # assign or create the recorder object
+        cam = bpy.data.objects.get(scene.recorded_object)
 
+        # assign or create the recorder object
         cam_ob = create_recorder_empty(context, "Camera_helper_Empty")
         if not scene.vp_action_overwrite:
             action = cam_ob.animation_data.action
             bpy.ops.scene.add_vp_shot()
-
         cam.animation_data_clear()
+
+        # controller
+        controller = bpy.data.objects.get(scene.recorded_controller)
+        if controller:
+            controller_ob = create_recorder_empty(context, "Controller_helper_Empty")
+            controller.animation_data_clear()
         # play and handle recording
         bpy.ops.screen.animation_play()
         bpy.app.handlers.frame_change_post.append(record_handler)
@@ -349,6 +361,7 @@ class VIEW_3D_PT_vp_recorder(Panel):
         layout.use_property_decorate = False
         layout.prop(scene, "vp_camera")
         layout.prop(scene, "recorded_object")
+        layout.prop(scene, "recorded_controller")
         layout.prop(scene, "vp_action_overwrite")
         layout.prop(scene, "vp_action_name")
 
@@ -414,13 +427,18 @@ def register():
             description="Name of the action"
             )
     bpy.types.Scene.recorded_object = StringProperty(
-            name="Recorded Object",
+            name="Rec Object",
+            default="Empty",
+            description="Which Camera Object / Root is being recorded"
+            )
+    bpy.types.Scene.recorded_controller = StringProperty(
+            name="Rec Controller",
             default="Empty",
             description="Which Camera Object / Root is being recorded"
             )
     bpy.types.Scene.vp_camera = StringProperty(
             name="VP Camera",
-            default="",
+            default="Camera",
             description="Which Camera Object / Root is being recorded"
             )
     bpy.types.Scene.autokeysetting = BoolProperty(
@@ -428,7 +446,7 @@ def register():
             )
     bpy.types.Scene.vp_action_overwrite = BoolProperty(
             name="Overwrite VP action",
-            default=True,
+            default=False,
             description="Overwrite VP action or create a new one"
             )
     bpy.types.Object.vp_shot_list_index = IntProperty(
