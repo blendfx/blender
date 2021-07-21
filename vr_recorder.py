@@ -31,39 +31,17 @@ def create_recorder_empty(context, name):
     return object
 
 
-def filerecord_handler(scene):
-    ''' Write transformn data to file'''
-    # XXX this does not work yet
-    frame = scene.frame_current
-    cam = bpy.data.objects.get(scene.recorded_object)
-    scene.export_group.frame = frame
-    home = Path.home()
-    filename = "testfile.txt"
-    testfile = open(str(home / filename), "a+")
-    testfile.write(str(frame)+"\n")
-    # cam_ob.rotation_euler[0] = cam_ob.rotation_euler[0] - vr_cam.rotation_euler[0]
-    # cam_ob.rotation_euler[1] = cam_ob.rotation_euler[1] - vr_cam.rotation_euler[1]
-
-
 def record_handler(scene, cam_ob):
     ''' Write keyframes to action of Camera_helper_Empty '''
     frame = scene.frame_current
-    cam = bpy.data.objects.get(scene.recorded_object)
+    # get the object controlled by the tracker, to get its motion
     vr_cam = bpy.data.objects.get(scene.vp_camera)
     cam_ob = bpy.data.objects.get("Camera_helper_Empty")
-    cam_ob.matrix_world = cam.matrix_world
+    cam_ob.matrix_world = vr_cam.matrix_world
     # write keyframes
+    # cam_ob.rotation_euler[1] = cam_ob.rotation_euler[1] - vr_cam.rotation_euler[1]
     cam_ob.keyframe_insert(data_path="location", frame=frame)
     cam_ob.keyframe_insert(data_path="rotation_euler", frame=frame)
-
-    # record controller, if available
-    controller = bpy.data.objects.get(scene.recorded_controller)
-    if not controller:
-        return
-    controller_ob = bpy.data.objects.get("Controller_helper_Empty")
-    controller_ob.matrix_world = controller.matrix_world
-    controller_ob.keyframe_insert(data_path="location", frame=frame)
-    controller_ob.keyframe_insert(data_path="rotation_euler", frame=frame)
 
 
 class ListItem(PropertyGroup):
@@ -94,7 +72,7 @@ class VP_OT_add_shot(Operator):
     bl_label = "Add VP Shot"
 
     def execute(self, context):
-        context.object.vp_shot_list.add()
+        context.scene.vp_shot_list.add()
         return {'FINISHED'}
 
 
@@ -122,7 +100,7 @@ class VP_OT_play_shot(Operator):
         data = bpy.data
         scene = context.scene
         # get the action by addressing the index
-        index = context.object.vp_shot_list_index
+        index = context.scene.vp_shot_list_index
         action = data.actions[index]
 
         # initirate handler
@@ -174,11 +152,11 @@ class VP_OT_delete_shot(Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.object.vp_shot_list
+        return context.scene.vp_shot_list
 
     def execute(self, context):
         scene = context.scene
-        index = context.object.vp_shot_list_index
+        index = context.scene.vp_shot_list_index
         bpy.data.actions.remove(bpy.data.actions[index])
 
         return{'FINISHED'}
@@ -191,11 +169,11 @@ class VP_OT_use_shot(Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.object.vp_shot_list
+        return context.scene.vp_shot_list
 
     def execute(self, context):
         scene = context.scene
-        index = context.object.vp_shot_list_index
+        index = context.scene.vp_shot_list_index
         cam = bpy.data.objects[scene.vp_camera]
         cam.animation_data_create()
         cam.animation_data.action = bpy.data.actions[index]
@@ -241,52 +219,6 @@ class VIEW_3D_OT_change_focus(Operator):
         return {'FINISHED'}
 
 
-class VIEW_3D_OT_vp_file_recorder(Operator):
-    """Record the animation to a file"""
-    bl_idname = "scene.vp_file_recorder"
-    bl_label = "Start VP FileRecorder"
-
-    @classmethod
-    def poll(cls, context):
-        return bpy.data.objects.get(context.scene.recorded_object)
-
-    def modal(self, context, event):
-        '''run modal until we cancel'''
-        scene = context.scene
-        if event.type in {'RIGHTMOUSE', 'ESC'}:
-            self.cancel(context)
-            return {'CANCELLED'}
-        if scene.frame_current == scene.frame_end:
-            self.cancel(context)
-            return {'FINISHED'}
-        return {'PASS_THROUGH'}
-
-    def execute(self, context):
-        data = bpy.data
-        scene = context.scene
-        scene.frame_current = scene.frame_start
-        wm = context.window_manager
-        wm.modal_handler_add(self)
-
-        home = Path.home()
-        filename = "testfile.txt"
-        testfile = open(str(home / filename), "w")
-        # make sure the file is empty
-        testfile.write("")
-        bpy.ops.screen.animation_play()
-        bpy.app.handlers.frame_change_post.append(filerecord_handler)
-
-        return {'RUNNING_MODAL'}
-
-    def cancel(self, context):
-        '''cancel animation an remove contraints'''
-        scene = context.scene
-        print(scene.export_group.frame)
-        bpy.ops.screen.animation_cancel(restore_frame=True)
-        bpy.app.handlers.frame_change_post.remove(filerecord_handler)
-        return {'FINISHED'}
-
-
 class VIEW_3D_OT_vp_start_recording(Operator):
     """Assign a helper object, start playback and handle recording"""
     bl_idname = "scene.vp_start_recording"
@@ -303,21 +235,17 @@ class VIEW_3D_OT_vp_start_recording(Operator):
         scene.autokeysetting = scene.tool_settings.use_keyframe_insert_auto
         scene.tool_settings.use_keyframe_insert_auto = True
 
-        # get vr camera and clear animation
+        # get the object controlled by the tracker, to get its motion
         cam = bpy.data.objects.get(scene.recorded_object)
+        # make sure the recorded object doesn't have any keyframes, they would interfere with the VR motion
+        cam.animation_data_clear()
 
         # assign or create the recorder object
         cam_ob = create_recorder_empty(context, "Camera_helper_Empty")
         if not scene.vp_action_overwrite:
             action = cam_ob.animation_data.action
             bpy.ops.scene.add_vp_shot()
-        cam.animation_data_clear()
 
-        # controller
-        controller = bpy.data.objects.get(scene.recorded_controller)
-        if controller:
-            controller_ob = create_recorder_empty(context, "Controller_helper_Empty")
-            controller.animation_data_clear()
         # play and handle recording
         bpy.ops.screen.animation_play()
         bpy.app.handlers.frame_change_post.append(record_handler)
@@ -361,7 +289,6 @@ class VIEW_3D_PT_vp_recorder(Panel):
         layout.use_property_decorate = False
         layout.prop(scene, "vp_camera")
         layout.prop(scene, "recorded_object")
-        layout.prop(scene, "recorded_controller")
         layout.prop(scene, "vp_action_overwrite")
         layout.prop(scene, "vp_action_name")
 
@@ -374,7 +301,6 @@ class VIEW_3D_PT_vp_recorder(Panel):
         row = layout.row(align=True)
         row.operator("scene.vp_start_recording", text="Start Recording")
         row.operator("scene.vp_stop_recording", text="Stop Recording")
-        row.operator("scene.vp_file_recorder", text="File Recorder")
 
 
 class VIEW_3D_PT_vp_playback(Panel):
@@ -393,7 +319,7 @@ class VIEW_3D_PT_vp_playback(Panel):
         row = layout.row()
         col = row.column()
         ob = context.object
-        col.template_list("VP_UL_shot_list", "", bpy.data, "actions", ob, "vp_shot_list_index")
+        col.template_list("VP_UL_shot_list", "", bpy.data, "actions", scene, "vp_shot_list_index")
         col.operator("scene.vp_play_shot")
         col.operator("scene.delete_item", text="Remove Shot")
         col.operator("scene.use_shot", text="Use Shot")
@@ -406,7 +332,6 @@ classes = (
         VP_OT_delete_shot,
         VP_OT_use_shot,
         VP_OT_add_shot,
-        VIEW_3D_OT_vp_file_recorder,
         VIEW_3D_OT_vp_start_recording,
         VIEW_3D_PT_vp_playback,
         VIEW_3D_OT_toggle_dof,
@@ -427,19 +352,14 @@ def register():
             description="Name of the action"
             )
     bpy.types.Scene.recorded_object = StringProperty(
-            name="Rec Object",
+            name="Recorded Object",
             default="Empty",
-            description="Which Camera Object / Root is being recorded"
-            )
-    bpy.types.Scene.recorded_controller = StringProperty(
-            name="Rec Controller",
-            default="Empty",
-            description="Which Camera Object / Root is being recorded"
+            description="The object that will be driven by the tracker and to which the VP Camera will be constrained"
             )
     bpy.types.Scene.vp_camera = StringProperty(
             name="VP Camera",
             default="Camera",
-            description="Which Camera Object / Root is being recorded"
+            description="The camera used in VR, usually driven by the Recorded Object"
             )
     bpy.types.Scene.autokeysetting = BoolProperty(
             name="Use Autokey"
@@ -449,11 +369,11 @@ def register():
             default=False,
             description="Overwrite VP action or create a new one"
             )
-    bpy.types.Object.vp_shot_list_index = IntProperty(
+    bpy.types.Scene.vp_shot_list_index = IntProperty(
             name="Index of Shots",
             default=0
             )
-    bpy.types.Object.vp_shot_list = CollectionProperty(
+    bpy.types.Scene.vp_shot_list = CollectionProperty(
             type=ListItem
             )
 
