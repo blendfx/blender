@@ -226,7 +226,7 @@ class VIEW_3D_OT_vp_start_recording(Operator):
 
     @classmethod
     def poll(cls, context):
-        return bpy.data.objects.get(context.scene.recorded_object)
+        return bpy.data.objects.get(context.scene.vp_camera)
 
     def execute(self, context):
         # store autokey
@@ -236,7 +236,7 @@ class VIEW_3D_OT_vp_start_recording(Operator):
         scene.tool_settings.use_keyframe_insert_auto = True
 
         # get the object controlled by the tracker, to get its motion
-        cam = bpy.data.objects.get(scene.recorded_object)
+        cam = bpy.data.objects.get(scene.vp_camera)
         # make sure the recorded object doesn't have any keyframes, they would interfere with the VR motion
         cam.animation_data_clear()
 
@@ -259,11 +259,11 @@ class VIEW_3D_OT_vp_stop_recording(Operator):
 
     @classmethod
     def poll(cls, context):
-        return bpy.data.objects.get(context.scene.recorded_object)
+        return bpy.data.objects.get(context.scene.vp_camera)
 
     def execute(self, context):
         scene = context.scene
-        cam = bpy.data.objects.get(context.scene.recorded_object)
+        cam = bpy.data.objects.get(context.scene.vp_camera)
         cam_ob = bpy.data.objects.get("Camera_helper_Empty")
         # stop animation and remove handler
         bpy.ops.screen.animation_cancel(restore_frame=False)
@@ -288,7 +288,6 @@ class VIEW_3D_PT_vp_recorder(Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
         layout.prop(scene, "vp_camera")
-        layout.prop(scene, "recorded_object")
         layout.prop(scene, "vp_action_overwrite")
         layout.prop(scene, "vp_action_name")
 
@@ -350,11 +349,6 @@ def register():
             name="Shot name",
             default="shot",
             description="Name of the action"
-            )
-    bpy.types.Scene.recorded_object = StringProperty(
-            name="Recorded Object",
-            default="Empty",
-            description="The object that will be driven by the tracker and to which the VP Camera will be constrained"
             )
     bpy.types.Scene.vp_camera = StringProperty(
             name="VP Camera",
