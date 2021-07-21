@@ -107,6 +107,7 @@ class VP_OT_play_shot(Operator):
         wm = context.window_manager
         wm.modal_handler_add(self)
         vp_camera = data.objects.get(scene.vp_camera)
+        vp_camera.hide_viewport = True
 
         # create player camera if necessary
         if not "temp_player_cam" in data.cameras:
@@ -141,6 +142,7 @@ class VP_OT_play_shot(Operator):
         bpy.ops.screen.animation_cancel(restore_frame=True)
         # set scene camera back to vp_camera
         cam = bpy.data.objects[scene.vp_camera]
+        cam.hide_viewport = False
         scene.camera = cam
         return {'FINISHED'}
 
