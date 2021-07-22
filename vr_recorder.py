@@ -112,16 +112,19 @@ class VP_OT_play_shot(Operator):
         # create player camera if necessary
         if not "temp_player_cam" in data.cameras:
             player_cam = data.cameras.new("temp_player_cam")
-        player_cam = data.cameras.get("temp_player_cam")
-        # configure camera data
-        player_cam.lens = vp_camera.data.lens
-        player_cam.sensor_width = vp_camera.data.sensor_width
-        # link player data to temp camera object
+        else:
+            player_cam = data.cameras.get("temp_player_cam")
+
         if not "temp_player_camera" in data.objects:
             player = data.objects.new("temp_player_camera", player_cam)
         else:
             player = data.objects.get("temp_player_camera")
-            player.data = player_cam
+
+        player.data = player_cam
+        # configure camera data
+        player_cam.lens = vp_camera.data.lens
+        player_cam.sensor_width = vp_camera.data.sensor_width
+        # link player data to temp camera object
 
         # assign action to the player
         player.animation_data_create()
@@ -171,13 +174,14 @@ class VP_OT_use_shot(Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.scene.vp_shot_list
+        return (context.scene.vp_shot_list and bpy.data.objects.get(context.scene.scene_camera))
 
     def execute(self, context):
         scene = context.scene
         index = context.scene.vp_shot_list_index
-        cam = bpy.data.objects[scene.vp_camera]
-        cam.animation_data_create()
+        cam = bpy.data.objects[scene.scene_camera]
+        if cam.animation_data is None:
+            cam.animation_data_create()
         cam.animation_data.action = bpy.data.actions[index]
 
         return{'FINISHED'}
@@ -247,6 +251,8 @@ class VIEW_3D_OT_vp_start_recording(Operator):
         if not scene.vp_action_overwrite:
             action = cam_ob.animation_data.action
             bpy.ops.scene.add_vp_shot()
+        else:
+            cam_ob.animation_data_clear()
 
         # play and handle recording
         bpy.ops.screen.animation_play()
@@ -290,6 +296,7 @@ class VIEW_3D_PT_vp_recorder(Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
         layout.prop(scene, "vp_camera")
+        layout.prop(scene, "scene_camera")
         layout.prop(scene, "vp_action_overwrite")
         layout.prop(scene, "vp_action_name")
 
@@ -351,6 +358,11 @@ def register():
             name="Shot name",
             default="shot",
             description="Name of the action"
+            )
+    bpy.types.Scene.scene_camera = StringProperty(
+            name="Scene Camera",
+            default="Scene_Camera",
+            description="The camera not controlled by VR, which you can use to preview the shot or use as main scene camera"
             )
     bpy.types.Scene.vp_camera = StringProperty(
             name="VP Camera",
