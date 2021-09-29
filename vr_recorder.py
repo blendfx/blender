@@ -1,7 +1,11 @@
+import logging
+
 import bpy
 from bpy.props import (BoolProperty, CollectionProperty, IntProperty,
                        StringProperty)
 from bpy.types import Operator, Panel, PropertyGroup, UIList
+
+logger = logging.getLogger(__name__)
 
 
 def stop_recording(scene):
