@@ -88,7 +88,7 @@ class VP_OT_play_shot(Operator):
 
     @classmethod
     def poll(cls, context):
-        return bpy.data.objects.get(context.scene.vp_camera)
+        return bpy.data.objects.get(context.scene.vp_camera) and len(bpy.data.actions) > 0
 
     def modal(self, context, event):
         '''run modal until we cancel'''
