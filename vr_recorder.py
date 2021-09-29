@@ -48,7 +48,7 @@ def record_handler(scene, cam_ob):
     cam_ob.keyframe_insert(data_path="rotation_euler", frame=frame)
 
 
-class ListItem(PropertyGroup):
+class ShotList(PropertyGroup):
     '''List of shot actions'''
     name:  StringProperty(
         name="ActionName",
@@ -342,7 +342,7 @@ class VIEW_3D_PT_vp_playback(Panel):
 
 
 classes = (
-    ListItem,
+    ShotList,
     VP_UL_shot_list,
     VP_OT_play_shot,
     VP_OT_delete_shot,
@@ -391,7 +391,7 @@ def register():
         default=0
     )
     bpy.types.Scene.vp_shot_list = CollectionProperty(
-        type=ListItem
+        type=ShotList
     )
 
     bpy.app.handlers.frame_change_pre.append(stop_recording)
