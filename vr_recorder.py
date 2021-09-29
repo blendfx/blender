@@ -10,8 +10,9 @@ logger = logging.getLogger(__name__)
 
 def stop_recording(scene):
     '''automatically stop recording when animation has reached the last frame'''
-    if scene.frame_current == scene.frame_end:
+    if scene.frame_current >= scene.frame_end:
         bpy.ops.scene.vp_stop_recording()
+        logger.info('Stopped playback.')
 
 
 def create_recorder_empty(context, name):
@@ -96,7 +97,7 @@ class VP_OT_play_shot(Operator):
         if event.type in {'RIGHTMOUSE', 'ESC'}:
             self.cancel(context)
             return {'CANCELLED'}
-        if scene.frame_current == scene.frame_end:
+        if scene.frame_current >= scene.frame_end:
             self.cancel(context)
             return {'FINISHED'}
         return {'PASS_THROUGH'}
@@ -165,7 +166,6 @@ class VP_OT_delete_shot(Operator):
         return context.scene.vp_shot_list
 
     def execute(self, context):
-        scene = context.scene
         index = context.scene.vp_shot_list_index
         bpy.data.actions.remove(bpy.data.actions[index])
 
