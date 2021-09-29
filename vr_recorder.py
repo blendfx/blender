@@ -158,7 +158,7 @@ class VP_OT_play_shot(Operator):
 
 class VP_OT_delete_shot(Operator):
     '''Delete Selected Shot'''
-    bl_idname = "scene.delete_item"
+    bl_idname = "scene.delete_shot"
     bl_label = "Delete VP Shot"
 
     @classmethod
@@ -337,7 +337,7 @@ class VIEW_3D_PT_vp_playback(Panel):
         col.template_list("VP_UL_shot_list", "", bpy.data,
                           "actions", scene, "vp_shot_list_index")
         col.operator("scene.vp_play_shot")
-        col.operator("scene.delete_item", text="Remove Shot")
+        col.operator("scene.delete_shot", text="Remove Shot")
         col.operator("scene.use_shot", text="Use Shot")
 
 
