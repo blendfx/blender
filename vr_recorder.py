@@ -163,7 +163,7 @@ class VP_OT_delete_shot(Operator):
 
     @classmethod
     def poll(cls, context):
-        return context.scene.vp_shot_list
+        return context.scene.vp_shot_list and len(bpy.data.actions) > 0
 
     def execute(self, context):
         index = context.scene.vp_shot_list_index
